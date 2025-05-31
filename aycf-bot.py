@@ -6,6 +6,8 @@ from selenium.webdriver.chrome.service import Service
 from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
 from webdriver_manager.chrome import ChromeDriverManager
 import time
+from dotenv import load_dotenv
+import os
 
 
 def launch_browser():
@@ -21,6 +23,7 @@ def open_homepage(driver):
 
 
 def login(driver, wait, email, password):
+	open_homepage(driver)
 	print("[3] Clicking login button...")
 	login_btn = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, "button.CvoHeader-loginButton")))
 	login_btn.click()
@@ -40,7 +43,7 @@ def login(driver, wait, email, password):
 		print("    No modal or already closed.")
 
 
-def wait_for_visible_dropdown_with_items(driver, timeout=10):
+def wait_for_visible_dropdown_with_items(driver, timeout=5):
 	wait = WebDriverWait(driver, timeout)
 
 	def condition(_):
@@ -131,12 +134,12 @@ def scrape_results(driver):
 		no_results = driver.find_elements(By.CSS_SELECTOR, "article.AvailabilityPage-noResultMessage")
 		if no_results:
 			print("❌ No flights found for the selected date.")
-			return
+			return False
 
 		flights = driver.find_elements(By.CLASS_NAME, "CvoCollapsibleDirectFlightRow-content")
 		if not flights:
 			print("⚠️ No flight rows found but no 'no results' message either.")
-			return
+			return False
 
 		print(f"✅ Found {len(flights)} flight(s):")
 		for flight in flights:
@@ -147,8 +150,83 @@ def scrape_results(driver):
 				print(f"✈️  Flight: {dep_time} → {arr_time}, Price: {price}")
 			except Exception as e:
 				print(f"⚠️ Error parsing flight: {e}")
+				return False
+		return True
 	except Exception as e:
 		print(f"❌ Unexpected error while scraping results: {e}")
+		return False
+
+
+def check_flight_availabilty(driver, wait, origin_query, origin_full, dest_query, dest_full, date):
+	fill_route(driver, wait, origin_query, origin_full, dest_query, dest_full)
+	select_date(driver, wait, date)
+	click_search(driver, wait)
+	return scrape_results(driver)
+
+
+def get_available_destinations(driver, wait, input_id_prefix, destination_id_prefix, origin_query, origin_full):
+	open_homepage(driver)
+	print(f"🌍 Getting destinations available from: {origin_full}")
+
+	# Select origin airport
+	select_location_input(driver, wait, input_id_prefix, origin_query, origin_full)
+
+	# Click destination input to trigger dropdown
+	dest_input_selector = f'input[id^="{destination_id_prefix}"]'
+	dest_input = wait.until(EC.element_to_be_clickable((By.CSS_SELECTOR, dest_input_selector)))
+	dest_input.click()
+
+	# Wait for dropdown to appear and collect destination options
+	try:
+		dropdown_ul = wait_for_visible_dropdown_with_items(driver)
+		options = dropdown_ul.find_elements(By.TAG_NAME, "li")
+	except TimeoutException:
+		raise Exception("❌ No destination dropdown options appeared.")
+
+	destinations = []
+	print("📋 Available destinations:")
+	for option in options:
+		try:
+			text = option.text.strip()
+			print(f" - {text}")
+			prefix = text.split("(")[0].strip().split()[0].lower()  # e.g. "rome"
+			full = text.strip()  # e.g. "Rome Fiumicino (FCO)"
+			destinations.append( (prefix, full) )
+		except StaleElementReferenceException:
+			continue
+
+	print(f"✅ Found {len(destinations)} destinations.")
+	return destinations
+
+
+def filter_connctions_that_are_not_in_destinations(destinations, connections):
+	destinations_set = {prefix for prefix, _ in destinations}
+	return [conn for conn in connections if conn[0] in destinations_set]
+
+def print_possible_connections(connections):
+	print("\nPossible connections:")
+	for prefix, full in connections:
+		print(f" - {prefix} ({full})")
+	print(f"Total connections found: {len(connections)}\n")
+ 
+
+def find_connections_flights(driver, wait, origin_query, origin_full, dest_query, dest_full, date):
+	origin_to_connection_destinations = get_available_destinations(driver, wait, "autocomplete-origin", "autocomplete-destination", origin_query, origin_full)
+	connection_to_destination_destinations = get_available_destinations(driver, wait, "autocomplete-destination", "autocomplete-origin", dest_query, dest_full)
+	
+	connection_to_destinations_flights = filter_connctions_that_are_not_in_destinations(connection_to_destination_destinations, origin_to_connection_destinations)
+	print_possible_connections(connection_to_destinations_flights)
+ 
+	origin_to_connection_flights = []
+	for connection_prefix, connection_full in connection_to_destinations_flights:
+		open_homepage(driver)
+		if check_flight_availabilty(driver, wait, origin_query, origin_full, connection_prefix, connection_full, date):
+			open_homepage(driver)
+			if check_flight_availabilty(driver, wait, connection_prefix, connection_full, dest_query, dest_full, date):
+				origin_to_connection_flights.append((connection_prefix, connection_full))
+	print(f"\n✈️ Found {len(origin_to_connection_flights)} connection flights from {origin_full} to {dest_full} via other airports:")
+	for flight in origin_to_connection_flights:
+		print(f" - {flight}")
 
 
 def finalize(driver):
@@ -160,20 +238,18 @@ def find_aycf_flights(email, password, origin_query, origin_full, dest_query, de
 	driver = launch_browser()
 	wait = WebDriverWait(driver, 20)
 
-	open_homepage(driver)
 	login(driver, wait, email, password)
-	fill_route(driver, wait, origin_query, origin_full, dest_query, dest_full)
-	select_date(driver, wait, date)
-	click_search(driver, wait)
-	scrape_results(driver)
+	if not check_flight_availabilty(driver, wait, origin_query, origin_full, dest_query, dest_full, date):
+		find_connections_flights(driver, wait, origin_query, origin_full, dest_query, dest_full, date)
 	finalize(driver)
 
 
 if __name__ == "__main__":
+	load_dotenv()
 	find_aycf_flights(
-	email="email",
-	password="password",
-	origin_query="rome", origin_full="Rome Fiumicino (FCO)",
-	dest_query="tel", dest_full="Tel-Aviv (TLV)",
-	date="2025-06-01"
-)
+		email=os.getenv("EMAIL"),
+		password=os.getenv("PASSWORD"),
+		origin_query="rome", origin_full="Rome Fiumicino (FCO)",
+		dest_query="tel", dest_full="Tel-Aviv (TLV)",
+		date="2025-06-02"
+	)
