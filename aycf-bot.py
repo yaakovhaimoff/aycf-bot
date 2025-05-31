@@ -19,7 +19,7 @@ def launch_browser():
 
 def open_homepage(driver):
 	print("[2] Opening Wizz homepage...")
-	driver.get("https://multipass.wizzair.com")
+	driver.get(os.getenv("MULTIPASS_WIZZAIR_URL"))
 
 
 def login(driver, wait, email, password):
