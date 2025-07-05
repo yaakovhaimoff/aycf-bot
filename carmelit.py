@@ -12,6 +12,10 @@ from datetime import datetime, timedelta
 from logger import logger
 
 
+MINIMUM_LAYOVER_MINUTES = 60
+MAXIMUM_LAYOVER_MINUTES = 60 * 8
+
+
 def launch_browser():
 	logger.info("Launching browser...")
 	options = Options()
@@ -94,7 +98,8 @@ def select_location_input(driver, wait, input_id_prefix: str, query: str, exact_
 		dropdown_ul = wait_for_visible_dropdown_with_items(driver)
 		options = dropdown_ul.find_elements(By.TAG_NAME, "li")
 	except TimeoutException:
-		raise Exception(f"No dropdown with visible items appeared for: {exact_text}")
+		logger.error(f"No dropdown with visible items appeared for: {exact_text}")
+		return
 
 	for option in options:
 		try:
@@ -110,7 +115,7 @@ def select_location_input(driver, wait, input_id_prefix: str, query: str, exact_
 		except StaleElementReferenceException:
 			continue
 
-	raise Exception(f"Could not find dropdown option for: {exact_text}")
+	logger.error(f"Could not find dropdown option for: {exact_text}")
 
 
 def fill_route(driver, wait, origin_query, origin_full, dest_query, dest_full):
@@ -127,7 +132,7 @@ def select_calendar_date(wait, date_str: str):
 		date_cell.click()
 		logger.info(f"Clicked date {date_str}")
 	except Exception as e:
-		raise Exception(f"Could not select date {date_str}: {e}")
+		logger.error(f"Could not select date {date_str}: {e}")
 
 
 def select_date(wait, date):
@@ -204,7 +209,7 @@ def get_available_destinations(driver, wait, input_id_prefix, destination_id_pre
 		dropdown_ul = wait_for_visible_dropdown_with_items(driver)
 		options = dropdown_ul.find_elements(By.TAG_NAME, "li")
 	except TimeoutException:
-		raise Exception("No destination dropdown options appeared.")
+		logger.error("No destination dropdown options appeared.")
 
 	destinations = []
 	logger.info("Available destinations:")
@@ -234,67 +239,103 @@ def print_possible_connections(connections):
 	logger.info(f"Total connections found: {len(connections)}\n")
  
 
-def parse_time(time_str):
-	"""Parses 'HH:MM' format into datetime object (today's date)."""
-	return datetime.strptime(time_str.strip(), "%H:%M")
+def parse_time(time_str, base_date=None):
+	"""Parses 'HH:MM' format with optional base date."""
+	base_date = base_date or datetime.today().date()
+	time_obj = datetime.strptime(time_str.strip(), "%H:%M").time()
+	return datetime.combine(base_date, time_obj)
 
 
-def is_valid_connection(arrival_time_str, departure_time_str, min_layover_minutes=90):
-	"""Checks if the layover time between two flights is sufficient."""
+def is_valid_connection(arrival_time_str, departure_time_str, arrival_date, departure_date,
+						min_layover_minutes=MINIMUM_LAYOVER_MINUTES,
+						max_layover_minutes=MAXIMUM_LAYOVER_MINUTES):
 	try:
-		arrival = parse_time(arrival_time_str)
-		departure = parse_time(departure_time_str)
+		arrival = parse_time(arrival_time_str, arrival_date)
+		departure = parse_time(departure_time_str, departure_date)
 		layover = departure - arrival
-		return layover >= timedelta(minutes=min_layover_minutes)
-	except Exception:
+		return timedelta(minutes=min_layover_minutes) <= layover <= timedelta(minutes=max_layover_minutes)
+	except Exception as e:
+		logger.warning(f"Layover calculation failed: {e}")
 		return False
 
 
-def find_connections_flights(driver, wait, origin_query, origin_full, dest_query, dest_full, date):
-	origin_to_connection_destinations = get_available_destinations(driver, 
-                                                                		wait, 
-                                                                		"autocomplete-origin", 
-                                                                		"autocomplete-destination", 
-                                                                		origin_query, 
-                                                                		origin_full)
-	connection_to_destination_destinations = get_available_destinations(driver, 
-                                                                    	wait, 
-                                                                    	"autocomplete-destination", 
-                                                                		"autocomplete-origin", 
-                                                                		dest_query, 
-                                                                		dest_full)
+def get_valid_connection_dates(base_date: datetime.date):
+	today = datetime.today().date()
+	max_date = today + timedelta(days=3)
+
+	first_leg_dates = []
+	second_leg_dates = []
+
+	before_date = base_date - timedelta(days=1)
+	next_date = base_date + timedelta(days=1)
+
+	if today <= before_date <= max_date:
+		first_leg_dates.append(before_date)
+	if today <= base_date <= max_date:
+		first_leg_dates.append(base_date)
+
+	if today <= base_date <= max_date:
+		second_leg_dates.append(base_date)
+	if today <= next_date <= max_date:
+		second_leg_dates.append(next_date)
+
+	return first_leg_dates, second_leg_dates
+
+
+def find_connections_flights(driver, wait, origin_query, origin_full, dest_query, dest_full, date_str):
+	base_date = datetime.strptime(date_str, "%Y-%m-%d").date()
+	first_leg_dates, second_leg_dates = get_valid_connection_dates(base_date)
+
+	flight_cache = {}
+
+	def get_cached_flights(origin_query, origin_full, destination_query, destination_full, date):
+		key = (origin_full, destination_full, date)
+		if key not in flight_cache:
+			open_homepage(driver)
+			flight_cache[key] = check_flight_availabilty(driver, wait, origin_query, origin_full, destination_query, destination_full, date.isoformat()) or []
+		return flight_cache[key]
+
+	origin_to_connection_destinations = get_available_destinations(driver, wait, "autocomplete-origin", "autocomplete-destination", origin_query, origin_full)
+	connection_to_destination_destinations = get_available_destinations(driver, wait, "autocomplete-destination", "autocomplete-origin", dest_query, dest_full)
 
 	connection_to_destinations_flights = filter_connctions_that_are_not_in_destinations(
-    																					connection_to_destination_destinations, 
-                        																origin_to_connection_destinations)
-
+		connection_to_destination_destinations, origin_to_connection_destinations)
+	logger.info(f"Found {len(connection_to_destinations_flights)} possible connections from {origin_full} to {dest_full}.")
+	for prefix, full in connection_to_destinations_flights:
+		logger.info(f" - {prefix} ({full})")
+	
 	valid_connections = []
 
 	for connection_prefix, connection_full in connection_to_destinations_flights:
-		open_homepage(driver)
+		for first_leg_date in first_leg_dates:
+			first_leg_flights = get_cached_flights(origin_query, origin_full, connection_prefix, connection_full, first_leg_date)
+			if not first_leg_flights:
+				continue
 
-		first_leg_flights = check_flight_availabilty(
-			driver, wait, origin_query, origin_full, connection_prefix, connection_full, date
-		)
-		if not first_leg_flights:
-			continue
+			for second_leg_date in second_leg_dates:
+				layover = second_leg_date - first_leg_date
+				if layover > timedelta(days=1):
+					logger.info(f"Skipping connection {connection_full} due to too long layover: {layover}")
+					continue
 
-		open_homepage(driver)
+				second_leg_flights = get_cached_flights(connection_prefix, connection_full, dest_query, dest_full, second_leg_date)
+				if not second_leg_flights:
+					continue
 
-		second_leg_flights = check_flight_availabilty(
-			driver, wait, connection_prefix, connection_full, dest_query, dest_full, date
-		)
-		if not second_leg_flights:
-			continue
-
-		for first in first_leg_flights:
-			for second in second_leg_flights:
-				if is_valid_connection(first["arrival"], second["departure"]):
-					valid_connections.append({
-						"via": f"{connection_full}",
-						"first_leg": first,
-						"second_leg": second
-					})
+				for first in first_leg_flights:
+					for second in second_leg_flights:
+						if is_valid_connection(first["arrival"], second["departure"], arrival_date=first_leg_date, departure_date=second_leg_date):
+							logger.info("----------------------------------------")
+							logger.info(f"Valid connection found: {connection_full} on {first_leg_date} → {second_leg_date}")
+							logger.info(f"  First leg: {first['departure']} → {first['arrival']}, Price: {first['price']}")
+							logger.info(f"  Second leg: {second['departure']} → {second['arrival']}, Price: {second['price']}")
+							logger.info(f"  Layover: {second['departure']} - {first['arrival']} = {second['departure']} - {first['arrival']} = {second['departure'] - first['arrival']}")
+							logger.info("  ----------------------------------------")
+							valid_connections.append({
+								"via": connection_full,
+								"first_leg": first,
+								"second_leg": second
+							})
 
 	return valid_connections
 
