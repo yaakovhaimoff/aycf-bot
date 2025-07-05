@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+	<meta charset="UTF-8">
+	<title>Login - Wizz Air AYCF</title>
+	<link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+	<div class="login-container">
+		<div class="login-card">
+			<div class="login-header">
+				<h1 style="color: white;">Wizz Air AYCF</h1>
+			</div>
+			<form method="POST" action="/login" class="login-form">
+				<div class="form-group">
+					<input type="email" name="email" placeholder="Email" required class="{{ 'input-error' if error }}">
+					{% if error %}
+					<span class="error-message">Invalid email address or password.</span>
+					{% endif %}
+				</div>
+				<div class="form-group">
+					<input type="password" name="password" placeholder="Password" required>
+				</div>
+				<button type="submit" class="login-btn">SIGN IN</button>
+			</form>
+		</div>
+	</div>
+</body>
+</html>
