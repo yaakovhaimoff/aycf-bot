@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Search Wizz Air Flights</title>
+  <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+  <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+</head>
+<body>
+
+  <h1>Search Wizz Air Flights</h1>
+
+  <form method="POST" action="/search">
+	<div class="search-box">
+	  <div>
+		<label for="origin">Origin:</label><br>
+		<input id="origin" placeholder="From (type to search)" autocomplete="off" required>
+		<input type="hidden" name="origin_query" id="origin_query">
+		<input type="hidden" name="origin_full" id="origin_full">
+	  </div>
+
+	  <div>
+		<label for="destination">Destination:</label><br>
+		<input id="destination" placeholder="To (type to search)" autocomplete="off" required>
+		<input type="hidden" name="dest_query" id="dest_query">
+		<input type="hidden" name="dest_full" id="dest_full">
+	  </div>
+
+	  <div>
+		<label for="date">Date:</label><br>
+		<input type="date" name="date" required>
+	  </div>
+
+	  <div>
+		<button type="submit">Search Flights</button>
+	  </div>
+	</div>
+  </form>
+
+  {% if show_results %}
+	<div class="flight-header">
+	  <h2>{{ origin_full }} → {{ dest_full }}</h2>
+	  <p>Departure: {{ date }}</p>
+
+	  {% if flights %}
+	  {% for flight in flights %}
+		<div class="flight-card">
+		  <div class="flight-info">
+			<p><strong>Departure:</strong> {{ flight.departure }}</p>
+			<p><strong>Arrival:</strong> {{ flight.arrival }}</p>
+		  </div>
+		  <div class="flight-price">
+			<p class="price"><strong>Price:</strong> {{ flight.price }}</p>
+			<button class="select-button">Select</button>
+		  </div>
+		</div>
+	  {% endfor %}
+	{% else %}
+	  <p>No direct or connecting flights found for this date.</p>
+	{% endif %}
+
+	</div>
+
+	<p class="note">Your first All You Can Fly flight is covered by your voucher. Subsequent flights cost €9.99 per booking.</p>
+  {% endif %}
+
+  <script src="{{ url_for('static', filename='autocomplete.js') }}"></script>
+</body>
+</html>
