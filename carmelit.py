@@ -1,11 +1,10 @@
 from selenium import webdriver
 from selenium.webdriver.common.by import By
-from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import StaleElementReferenceException, TimeoutException
-from webdriver_manager.chrome import ChromeDriverManager
+from selenium.webdriver.firefox.options import Options as FirefoxOptions
+from selenium.webdriver.firefox.service import Service as FirefoxService
 import os
 import time
 from datetime import datetime, timedelta
@@ -17,14 +16,12 @@ MAXIMUM_LAYOVER_MINUTES = 60 * 8
 
 
 def launch_browser():
-	logger.info("Launching browser...")
-	options = Options()
+	logger.info("Launching Firefox browser...")
+	options = FirefoxOptions()
 	options.add_argument("--headless")
 	options.add_argument("--no-sandbox")
 	options.add_argument("--disable-dev-shm-usage")
-	options.add_argument("--remote-allow-origins=*")
-	driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
-	driver.maximize_window()
+	driver = webdriver.Firefox(service=FirefoxService(), options=options)
 	logger.info("Browser launched successfully.")
 	return driver
 
