@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en"
+      xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Search Wizz Air Flights</title>
+    <link href="https://fonts.googleapis.com/css2?family=Segoe+UI:wght@400;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.css">
+    <link rel="stylesheet" th:href="@{/style.css}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+</head>
+<body>
+
+<div class="header-banner">
+    <h1>ALL YOU CAN FLY</h1>
+</div>
+
+<!-- Search Box -->
+<div class="container">
+    <form method="POST" th:action="@{/search}" class="search-form">
+        <div class="search-box">
+            <div>
+                <label for="origin">From:</label>
+                <input type="text" id="origin" placeholder="From (type to search)" autocomplete="off" required>
+                <input type="hidden" name="origin_query" id="origin_query">
+                <input type="hidden" name="origin_full" id="origin_full">
+            </div>
+
+            <div>
+                <label for="destination">To:</label>
+                <input type="text" id="destination" placeholder="To (type to search)" autocomplete="off" required>
+                <input type="hidden" name="dest_query" id="dest_query">
+                <input type="hidden" name="dest_full" id="dest_full">
+            </div>
+
+            <div>
+                <label for="datepicker">Departure Date:</label>
+                <input type="text" id="datepicker" name="date" required>
+            </div>
+
+
+            <div class="submit-container">
+                <button type="submit">Search Flights</button>
+            </div>
+            <div id="loader" class="loader" style="display: none;"></div>
+        </div>
+    </form>
+</div>
+
+<!-- Results -->
+<div class="flight-header" th:if="${show_results}">
+
+    <div th:if="${flights}">
+        <div th:each="flight : ${flights}" class="flight-card">
+            <h2 th:text="${origin_full} + ' → ' + ${dest_full}"></h2>
+            <p th:text="'Date: ' + ${flight.date}"></p>
+            <div class="flight-info">
+                <p><strong>Departure:</strong> <span th:text="${flight.departure}"></span></p>
+                <p><strong>Arrival:</strong> <span th:text="${flight.arrival}"></span></p>
+            </div>
+            <div class="flight-duration">
+                <p><strong>Duration:</strong> <span th:text="${flight.duration}"></span></p>
+            </div>
+            <div class="flight-price">
+                <p><strong>Price:</strong> <span th:text="${flight.price}"></span></p>
+            </div>
+        </div>
+    </div>
+    <p th:if="${flights == null or #lists.isEmpty(flights)}">
+        No direct or connecting flights found for this date.
+    </p>
+</div>
+
+<p class="note" th:if="${show_results}">
+    Your first All You Can Fly flight is covered by your Voucher. For subsequent bookings, a €9.99 flight price per booking will be paid in the following step.
+    The flight price will be charged in the currency of the booking. Schedule times shown are the local times of the departure and arrival city.
+</p>
+
+<!-- Scripts -->
+<script th:src="@{/airports.js}"></script>
+<script th:src="@{/autocomplete.js}"></script>
+<script th:src="@{/datepicker-limit.js}"></script>
+<script th:src="@{/loader.js}"></script>
+
+</body>
+</html>

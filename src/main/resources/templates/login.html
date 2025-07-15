@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="en"
+      xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Login - Wizz Air AYCF</title>
+    <link rel="stylesheet" th:href="@{/style.css}">
+</head>
+<body>
+<div class="login-container">
+    <div class="login-card">
+        <div class="login-header">
+            <h1 style="color: white;">Wizz Air AYCF</h1>
+        </div>
+        <form th:action="@{/login}" method="post" class="login-form">
+            <div class="form-group">
+                <input type="email"
+                       name="email"
+                       placeholder="Email"
+                       required
+                       th:classappend="${error} ? 'input-error'">
+                <span class="error-message"
+                      th:if="${error}">Invalid email address or password.</span>
+            </div>
+            <div class="form-group">
+                <input type="password" name="password" placeholder="Password" required>
+            </div>
+
+            <button type="submit" class="login-btn">SIGN IN</button>
+            <div id="loader" class="loader" style="display: none;"></div>
+        </form>
+    </div>
+</div>
+</body>
+<script th:src="@{/loader.js}"></script>
+</html>
