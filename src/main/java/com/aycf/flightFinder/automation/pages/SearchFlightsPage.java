@@ -1,5 +1,6 @@
 package com.aycf.flightFinder.automation.pages;
 
+import com.aycf.flightFinder.model.Destination;
 import com.aycf.flightFinder.model.Flight;
 import org.openqa.selenium.By;
 import org.openqa.selenium.StaleElementReferenceException;
@@ -9,20 +10,20 @@ import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import lombok.extern.slf4j.Slf4j;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
 
 @Slf4j
-public class SearchPage {
+public class SearchFlightsPage {
     private final WebDriver driver;
     private final WebDriverWait wait;
-
-    private String originQuery;
-    private String originFull;
-    private String destQuery;
-    private String destFull;
-    private String date;
-    public SearchPage(WebDriver driver, String originQuery, String originFull, String destQuery, String destFull, String date) {
+    private final String originQuery;
+    private final String originFull;
+    private final String destQuery;
+    private final String destFull;
+    private final String date;
+    public SearchFlightsPage(WebDriver driver, String originQuery, String originFull, String destQuery, String destFull, String date) {
         this.driver = driver;
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(20));
         this.originQuery = originQuery;
@@ -31,11 +32,42 @@ public class SearchPage {
         this.destFull = destFull;
         this.date = date;
     }
-    public List<Flight> checkFlightAvailability(){
-        fillRoute();
-        selectDate();
-        clickSearch();
-        return scrapeResults();
+
+    public List<Destination> getAvailableDestinations(String inputIdPrefix, String destinationIdPrefix, String originQuery, String originFull) {
+        log.info("Getting destinations available from: '{}'", originFull);
+
+        selectLocationInput(inputIdPrefix, originQuery, originFull);
+
+        String destinationInputSelector = String.format("input[id^='%s']", destinationIdPrefix);
+        WebElement destInput = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector(destinationInputSelector)));
+        destInput.clear();
+        destInput.click();
+
+        List<Destination> destinations = new ArrayList<>();
+
+        try {
+            WebElement dropdownUl = waitForVisibleDropdownWithItems();
+            List<WebElement> options = dropdownUl.findElements(By.tagName("li"));
+
+            log.info("Available destinations:");
+            for (WebElement option : options) {
+                try {
+                    String text = option.getText().strip();
+                    log.info(" - {}", text);
+
+                    String[] parts = text.split("\\(");
+                    String prefix = parts[0].trim().split("\\s+")[0].toLowerCase();
+                    String full = text.trim();
+                    destinations.add(new Destination(prefix, full));
+                } catch (StaleElementReferenceException ignored) {
+                }
+            }
+            log.info("Found {} destinations.", destinations.size());
+        } catch (TimeoutException e) {
+            log.error("No destination dropdown options appeared.");
+        }
+
+        return destinations;
     }
     public void fillRoute() {
         selectLocationInput("autocomplete-origin", originQuery, originFull);
@@ -65,8 +97,6 @@ public class SearchPage {
                         option.click();
                         log.info("Selected location: {}", optionText);
                         return;
-                    } else {
-                        log.info("Not this option!");
                     }
                 } catch (StaleElementReferenceException e) {
                     continue;
@@ -94,7 +124,7 @@ public class SearchPage {
             return null;
         });
     }
-    private void selectDate() {
+    public void selectDate() {
         log.info("Selecting date: {}", date);
         WebElement dateSelector = wait.until(ExpectedConditions.elementToBeClickable(By.id("Departure-date")));
         dateSelector.click();
@@ -111,7 +141,7 @@ public class SearchPage {
             log.error("Could not select date {}: {}", date, e.getMessage());
         }
     }
-    private void clickSearch() {
+    public void clickSearch() {
         try {
             WebElement searchButton = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("button.SearchCombo-submit")));
             searchButton.click();
@@ -120,10 +150,10 @@ public class SearchPage {
             log.error("Error clicking search button: {}", e.getMessage());
         }
     }
-    private List<Flight> scrapeResults() {
+    public List<Flight> scrapeResults() {
         log.info("Waiting for flight results to load...");
         try {
-            Thread.sleep(8000);
+            Thread.sleep(2000);
         } catch (InterruptedException e) {
             log.error("Sleep interrupted: {}", e.getMessage());
         }

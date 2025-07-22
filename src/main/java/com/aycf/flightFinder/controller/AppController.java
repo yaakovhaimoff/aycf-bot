@@ -2,7 +2,7 @@ package com.aycf.flightFinder.controller;
 
 import com.aycf.flightFinder.automation.webdriver.WebDriverFactory;
 import com.aycf.flightFinder.model.Flight;
-import com.aycf.flightFinder.service.FlightSearchService;
+import com.aycf.flightFinder.service.IFlightSearchService;
 import org.openqa.selenium.WebDriver;
 import org.springframework.ui.Model;
 import com.aycf.flightFinder.service.LoginService;
@@ -21,19 +21,18 @@ import java.util.List;
 @RequestMapping("/")
 public class AppController {
     private final LoginService loginService;
-    private final FlightSearchService flightSearchService;
+    private final IFlightSearchService flightSearchService;
     WebDriver driver;
 
     @Autowired
     public AppController(LoginService loginService,
-                         FlightSearchService flightSearchService) {
+                         IFlightSearchService flightSearchService) {
         this.loginService = loginService;
         this.flightSearchService = flightSearchService;
     }
 
     @GetMapping
     public String loginPage() {
-        log.info("Accessing login page get");
         return "login";
     }
 
@@ -61,17 +60,39 @@ public class AppController {
                                 @RequestParam("date") String date,
                                 Model model) {
         log.info("Searching flights with origin: " + origin_query + ", destination: " + dest_query + ", date: " + date);
-        List<Flight> flights = flightSearchService.search(driver, origin_query, origin_full, dest_query, dest_full, date);
-        if (flights.isEmpty()) {
-            model.addAttribute("error", "No flights found for the given criteria.");
-            return "searchFlights";
-        }
-        model.addAttribute("flights", flights);
+        List<Flight> flights = flightSearchService.searchDirectFlight(driver, origin_query, origin_full, dest_query, dest_full, date);
+        handleFlights(flights, model);
         model.addAttribute("show_results", true);
         model.addAttribute("origin_full", origin_full);
         model.addAttribute("dest_full", dest_full);
         model.addAttribute("date", date);
-
         return "searchFlights";
+    }
+
+    @PostMapping("/search-connections")
+    public String searchFlightsWithConnections(@RequestParam("origin_query") String origin_query,
+                                           @RequestParam("origin_full") String origin_full,
+                                           @RequestParam("dest_query") String dest_query,
+                                           @RequestParam("dest_full") String dest_full,
+                                           @RequestParam("date") String date,
+                                           Model model) {
+        log.info("Searching flights with connections from: " + origin_query + " to " + dest_query + " on " + date);
+        List<Flight> flights = flightSearchService.searchFlightsWithConnections(driver, origin_query, origin_full, dest_query, dest_full, date);
+        handleFlights(flights, model);
+        model.addAttribute("origin_full", origin_full);
+        model.addAttribute("dest_full", dest_full);
+        model.addAttribute("date", date);
+        return "searchFlights";
+    }
+
+    private void handleFlights(List<Flight> flights, Model model) {
+        if (flights.isEmpty()) {
+            model.addAttribute("no_direct_flights", true);
+            log.info("in flight is empty");
+        } else {
+            model.addAttribute("flights", flights);
+            log.info("in flight not empty");
+        }
+        model.addAttribute("show_results", true);
     }
 }

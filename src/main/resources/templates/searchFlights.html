@@ -67,9 +67,21 @@
             </div>
         </div>
     </div>
-    <p th:if="${flights == null or #lists.isEmpty(flights)}">
-        No direct or connecting flights found for this date.
-    </p>
+
+    <div th:if="${no_direct_flights}">
+        <h1>No direct flights found for this date.</h1>
+        <div>
+            <form method="POST" th:action="@{/search-connections}">
+                <input type="hidden" name="origin_query" th:value="${origin_query}" />
+                <input type="hidden" name="origin_full" th:value="${origin_full}" />
+                <input type="hidden" name="dest_query" th:value="${dest_query}" />
+                <input type="hidden" name="dest_full" th:value="${dest_full}" />
+                <input type="hidden" name="date" th:value="${date}" />
+                <button type="submit" class="connection-btn">Search Connecting Flights</button>
+            </form>
+        </div>
+    </div>
+
 </div>
 
 <p class="note" th:if="${show_results}">
