@@ -43,7 +43,7 @@
             <div class="submit-container">
                 <button type="submit">Search Flights</button>
             </div>
-            <div id="loader" class="loader" style="display: none;"></div>
+            <div class="loader" style="display: none;"></div>
         </div>
     </form>
 </div>
@@ -78,8 +78,13 @@
                 <input type="hidden" name="dest_full" th:value="${dest_full}" />
                 <input type="hidden" name="date" th:value="${date}" />
                 <button type="submit" class="connection-btn">Search Connecting Flights</button>
+                <div class="loader" style="display:none;"></div>
             </form>
         </div>
+    </div>
+
+    <div th:if="${no_connections}">
+        <h2>No connecting flights found for this route and date.</h2>
     </div>
 
 </div>

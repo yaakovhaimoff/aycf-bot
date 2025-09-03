@@ -91,7 +91,6 @@ public class SearchFlightsPage {
             for (WebElement option : options) {
                 try {
                     String optionText = option.getText().strip();
-                    log.info("   {}", optionText);
                     if (exactText.toLowerCase().contains(optionText.toLowerCase())) {
                         log.info("Match found: {} — attempting click...", optionText);
                         option.click();
@@ -125,7 +124,6 @@ public class SearchFlightsPage {
         });
     }
     public void selectDate() {
-        log.info("Selecting date: {}", date);
         WebElement dateSelector = wait.until(ExpectedConditions.elementToBeClickable(By.id("Departure-date")));
         dateSelector.click();
         selectCalendarDate();
@@ -153,7 +151,7 @@ public class SearchFlightsPage {
     public List<Flight> scrapeResults() {
         log.info("Waiting for flight results to load...");
         try {
-            Thread.sleep(2000);
+            Thread.sleep(8000);
         } catch (InterruptedException e) {
             log.error("Sleep interrupted: {}", e.getMessage());
         }
@@ -162,13 +160,13 @@ public class SearchFlightsPage {
         try {
             List<WebElement> noResults = driver.findElements(By.cssSelector("article.AvailabilityPage-noResultMessage"));
             if (!noResults.isEmpty()) {
-                log.warn("No flights found for the selected date.");
+                log.info("No flights found for the selected date.");
                 return List.of();
             }
 
             List<WebElement> flights = driver.findElements(By.className("CvoCollapsibleDirectFlightRow-content"));
             if (flights.isEmpty()) {
-                log.info("No flight rows found but no 'no results' message either.");
+                log.warn("No flight rows found but no 'no results' message either.");
                 return List.of();
             }
 

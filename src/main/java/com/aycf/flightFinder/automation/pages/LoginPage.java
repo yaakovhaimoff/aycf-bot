@@ -10,37 +10,28 @@ import java.time.Duration;
 
 @Slf4j
 public class LoginPage {
+    private final String LOGIN_URL = "https://multipass.wizzair.com";
     private final WebDriver driver;
     private final WebDriverWait wait;
-    private final String baseUrl;
-    public LoginPage(WebDriver driver, String baseUrl) {
+    public LoginPage(WebDriver driver) {
         this.driver = driver;
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(20));
-        this.baseUrl = baseUrl;
-    }
-    public boolean login(String email, String password) {
-        openHomePage();
-        clickSignIn();
-        fillLoginForm(email, password);
-        if (isLoginErrorDisplayed()) { return false; }
-        closeSuccessModalIfPresent();
-        return true;
     }
     public void openHomePage() {
-        driver.get(baseUrl);
+        driver.get(LOGIN_URL);
     }
-    private void clickSignIn() {
+    public void clickSignIn() {
         WebElement loginBtn = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("button.CvoHeader-loginButton")));
         loginBtn.click();
         log.info("Login button clicked, waiting for login form to appear.");
     }
-    private void fillLoginForm(String email, String password) {
+    public void fillLoginForm(String email, String password) {
         wait.until(ExpectedConditions.visibilityOfElementLocated(By.name("username"))).sendKeys(email);
         driver.findElement(By.name("password")).sendKeys(password);
         driver.findElement(By.id("kc-login")).click();
         log.info("Login form submitted, waiting for response.");
     }
-    private boolean isLoginErrorDisplayed() {
+    public boolean isLoginErrorDisplayed() {
         try {
             WebElement error = driver.findElement(By.id("input-error"));
             return error.isDisplayed() && error.getText().toLowerCase().contains("invalid email address or password");
@@ -48,7 +39,7 @@ public class LoginPage {
             return false;
         }
     }
-    private void closeSuccessModalIfPresent() {
+    public void closeSuccessModalIfPresent() {
         try {
             WebElement closeBtn = wait.until(ExpectedConditions.elementToBeClickable(By.cssSelector("button[data-testid='cvo-close']")));
             closeBtn.click();

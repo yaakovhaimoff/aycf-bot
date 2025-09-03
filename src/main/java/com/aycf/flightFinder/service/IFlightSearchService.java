@@ -8,5 +8,5 @@ public interface IFlightSearchService {
     List<Flight> searchDirectFlight(WebDriver webDriver, String originQuery, String originFull,
                                     String destQuery, String destFull, String date);
     List<Flight> searchFlightsWithConnections(WebDriver webDriver, String originQuery, String originFull,
-                                                     String destQuery, String destFull, String date);
+                                                     String destQuery, String destFull, String date, String sessionID);
 }

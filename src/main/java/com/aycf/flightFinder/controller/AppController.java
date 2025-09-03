@@ -2,7 +2,10 @@ package com.aycf.flightFinder.controller;
 
 import com.aycf.flightFinder.automation.webdriver.WebDriverFactory;
 import com.aycf.flightFinder.model.Flight;
+import com.aycf.flightFinder.model.UserCredentials;
+import com.aycf.flightFinder.service.ICredential;
 import com.aycf.flightFinder.service.IFlightSearchService;
+import jakarta.servlet.http.HttpSession;
 import org.openqa.selenium.WebDriver;
 import org.springframework.ui.Model;
 import com.aycf.flightFinder.service.LoginService;
@@ -22,13 +25,16 @@ import java.util.List;
 public class AppController {
     private final LoginService loginService;
     private final IFlightSearchService flightSearchService;
+    private final ICredential credentialService;
     WebDriver driver;
 
     @Autowired
     public AppController(LoginService loginService,
-                         IFlightSearchService flightSearchService) {
+                         IFlightSearchService flightSearchService,
+                         ICredential credentialService) {
         this.loginService = loginService;
         this.flightSearchService = flightSearchService;
+        this.credentialService = credentialService;
     }
 
     @GetMapping
@@ -39,9 +45,11 @@ public class AppController {
     @PostMapping("/login")
     public String login(@RequestParam("email") String email,
                         @RequestParam("password") String password,
+                        HttpSession session,
                         Model model) {
         log.info("Accessing login page post");
         driver = WebDriverFactory.createDriver(WebDriverFactory.BrowserType.CHROME);
+        credentialService.store(session.getId(), new UserCredentials(email, password));
         boolean success = loginService.login(driver, email, password);
 
         if (success) {
@@ -61,9 +69,11 @@ public class AppController {
                                 Model model) {
         log.info("Searching flights with origin: " + origin_query + ", destination: " + dest_query + ", date: " + date);
         List<Flight> flights = flightSearchService.searchDirectFlight(driver, origin_query, origin_full, dest_query, dest_full, date);
-        handleFlights(flights, model);
+        handleFlights(flights, model, "no_direct_flights", "No Direct Flights Found");
         model.addAttribute("show_results", true);
+        model.addAttribute("origin_query", origin_query);
         model.addAttribute("origin_full", origin_full);
+        model.addAttribute("dest_query", dest_query);
         model.addAttribute("dest_full", dest_full);
         model.addAttribute("date", date);
         return "searchFlights";
@@ -75,20 +85,21 @@ public class AppController {
                                            @RequestParam("dest_query") String dest_query,
                                            @RequestParam("dest_full") String dest_full,
                                            @RequestParam("date") String date,
+                                           HttpSession session,
                                            Model model) {
         log.info("Searching flights with connections from: " + origin_query + " to " + dest_query + " on " + date);
-        List<Flight> flights = flightSearchService.searchFlightsWithConnections(driver, origin_query, origin_full, dest_query, dest_full, date);
-        handleFlights(flights, model);
+        List<Flight> flights = flightSearchService.searchFlightsWithConnections(driver, origin_query, origin_full, dest_query, dest_full, date, session.getId());
+        handleFlights(flights, model, "no_connections", "No Connecting Flights Found");
         model.addAttribute("origin_full", origin_full);
         model.addAttribute("dest_full", dest_full);
         model.addAttribute("date", date);
         return "searchFlights";
     }
 
-    private void handleFlights(List<Flight> flights, Model model) {
+    private void handleFlights(List<Flight> flights, Model model, String modelAttribute, String errorMessage) {
         if (flights.isEmpty()) {
-            model.addAttribute("no_direct_flights", true);
-            log.info("in flight is empty");
+            model.addAttribute(modelAttribute, true);
+            log.info(errorMessage);
         } else {
             model.addAttribute("flights", flights);
             log.info("in flight not empty");

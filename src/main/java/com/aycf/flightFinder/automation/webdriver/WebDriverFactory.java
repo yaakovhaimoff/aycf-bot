@@ -22,14 +22,14 @@ public class WebDriverFactory {
                 case CHROME:
                     ChromeOptions chromeOptions = new ChromeOptions();
                     chromeOptions.addArguments("--no-sandbox", "--disable-dev-shm-usage");
-//                    chromeOptions.addArguments("--headless", "--no-sandbox", "--disable-dev-shm-usage");
+                    chromeOptions.addArguments("--headless", "--no-sandbox", "--disable-dev-shm-usage");
                     return new ChromeDriver( chromeOptions );
 
                 case FIREFOX:
                 default:
                     FirefoxOptions firefoxOptions = new FirefoxOptions();
                     firefoxOptions.addArguments("--no-sandbox", "--disable-dev-shm-usage");
-//                    firefoxOptions.addArguments("--headless", "--no-sandbox", "--disable-dev-shm-usage");
+                    firefoxOptions.addArguments("--headless", "--no-sandbox", "--disable-dev-shm-usage");
                     return new FirefoxDriver( firefoxOptions );
             }
         } catch ( Exception e ) {
