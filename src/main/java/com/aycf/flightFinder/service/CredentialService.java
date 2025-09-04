@@ -2,7 +2,6 @@ package com.aycf.flightFinder.service;
 
 import com.aycf.flightFinder.model.UserCredentials;
 import org.springframework.stereotype.Service;
-
 import java.util.HashMap;
 import java.util.Map;
 

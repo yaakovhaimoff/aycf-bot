@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <title>Login - Wizz Air AYCF</title>
-    <link rel="stylesheet" th:href="@{/style.css}">
+    <link rel="stylesheet" th:href="@{/css/style.css}">
 </head>
 <body>
 <div class="login-container">
@@ -14,13 +14,13 @@
         </div>
         <form th:action="@{/login}" method="post" class="login-form">
             <div class="form-group">
-                <input type="email"
-                       name="email"
+                <input type="text"
+                       name="username"
                        placeholder="Email"
                        required
                        th:classappend="${error} ? 'input-error'">
                 <span class="error-message"
-                      th:if="${error}">Invalid email address or password.</span>
+                      th:if="${param.error}">Invalid email address or password.</span>
             </div>
             <div class="form-group">
                 <input type="password" name="password" placeholder="Password" required>
@@ -32,5 +32,5 @@
     </div>
 </div>
 </body>
-<script th:src="@{/loader.js}"></script>
+<script th:src="@{/js/loader.js}"></script>
 </html>

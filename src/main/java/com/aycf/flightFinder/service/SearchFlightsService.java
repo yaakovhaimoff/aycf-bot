@@ -24,11 +24,11 @@ import io.micrometer.core.annotation.Timed;
 @Slf4j
 @Service
 public class SearchFlightsService implements IFlightSearchService {
-    private final CredentialService credentialService;
+    private final ICredential credentialService;
     private List<Destination> possibleConnections;
     private static final AtomicInteger activeBrowsers = new AtomicInteger(0);
     @Autowired
-    public SearchFlightsService(CredentialService credentialService) {
+    public SearchFlightsService(ICredential credentialService) {
         this.credentialService = credentialService;
     }
     @Override
