@@ -4,13 +4,14 @@
 <head>
     <meta charset="UTF-8">
     <title>Login - Wizz Air AYCF</title>
-    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <link rel="stylesheet" th:href="@{/css/style-login.css}">
+    <link rel="icon" type="image/png" th:href="@{/images/logo.png}">
 </head>
 <body>
 <div class="login-container">
     <div class="login-card">
         <div class="login-header">
-            <h1 style="color: white;">Wizz Air AYCF</h1>
+            <img th:src="@{/images/logo.png}" alt="Wizz Air AYCF Logo" class="login-logo">
         </div>
         <form th:action="@{/login}" method="post" class="login-form">
             <div class="form-group">

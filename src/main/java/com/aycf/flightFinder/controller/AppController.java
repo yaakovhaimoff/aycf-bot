@@ -1,6 +1,8 @@
 package com.aycf.flightFinder.controller;
 
 import com.aycf.flightFinder.model.Flight;
+import com.aycf.flightFinder.model.UserCredentials;
+import com.aycf.flightFinder.service.ICredential;
 import com.aycf.flightFinder.service.IFlightSearchService;
 import jakarta.servlet.http.HttpSession;
 import org.openqa.selenium.WebDriver;
@@ -18,10 +20,13 @@ import java.util.List;
 @Controller
 @RequestMapping("/")
 public class AppController {
+    private final ICredential credentialService;
     private final IFlightSearchService flightSearchService;
     WebDriver driver;
     @Autowired
-    public AppController(IFlightSearchService flightSearchService) {
+    public AppController(ICredential credentialService,
+                         IFlightSearchService flightSearchService) {
+        this.credentialService = credentialService;
         this.flightSearchService = flightSearchService;
     }
     @GetMapping
@@ -29,7 +34,8 @@ public class AppController {
         return "login";
     }
     @GetMapping("/search")
-    public String searchPage() {
+    public String searchPage(HttpSession session, Model model) {
+        addUserToModel(session, model);
         return "searchFlights";
     }
     @PostMapping("/search")
@@ -50,6 +56,7 @@ public class AppController {
         model.addAttribute("dest_query", dest_query);
         model.addAttribute("dest_full", dest_full);
         model.addAttribute("date", date);
+        addUserToModel(session, model);
         return "searchFlights";
     }
     @PostMapping("/search-connections")
@@ -66,6 +73,7 @@ public class AppController {
         model.addAttribute("origin_full", origin_full);
         model.addAttribute("dest_full", dest_full);
         model.addAttribute("date", date);
+        addUserToModel(session, model);
         return "searchFlights";
     }
     private void handleFlights(List<Flight> flights, Model model, String modelAttribute, String errorMessage) {
@@ -77,5 +85,12 @@ public class AppController {
             log.info("in flight not empty");
         }
         model.addAttribute("show_results", true);
+    }
+
+    private void addUserToModel(HttpSession session, Model model) {
+        UserCredentials credentials = credentialService.get(session.getId());
+        if (credentials != null) {
+            model.addAttribute("userEmail", credentials.email());
+        }
     }
 }

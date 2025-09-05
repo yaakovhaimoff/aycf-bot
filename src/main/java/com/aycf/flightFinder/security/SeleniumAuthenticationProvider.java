@@ -23,7 +23,7 @@ import java.util.List;
 @Slf4j
 @Component
 public class SeleniumAuthenticationProvider implements AuthenticationProvider {
-    final private LoginService loginService;
+    private final LoginService loginService;
     private final ICredential credentialService;
 
     @Autowired
@@ -51,6 +51,7 @@ public class SeleniumAuthenticationProvider implements AuthenticationProvider {
         return new UsernamePasswordAuthenticationToken(email, password, authorities);
     }
     private void storeWebDriverInSession(ServletRequestAttributes attr, WebDriver driver) {
+        log.info("Storing webdriver with session {}", attr.getRequest().getSession().getId());
         attr.getRequest().getSession().setAttribute("webdriver", driver);
     }
     private void storeCredentials(ServletRequestAttributes attr, String email, String password) {
