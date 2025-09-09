@@ -151,7 +151,7 @@ public class SearchFlightsPage {
     public List<Flight> scrapeResults() {
         log.info("Waiting for flight results to load...");
         try {
-            Thread.sleep(8000);
+            Thread.sleep(3000);
         } catch (InterruptedException e) {
             log.error("Sleep interrupted: {}", e.getMessage());
         }

@@ -3,6 +3,7 @@ package com.aycf.flightFinder.security;
 import com.aycf.flightFinder.automation.webdriver.WebDriverFactory;
 import com.aycf.flightFinder.model.UserCredentials;
 import com.aycf.flightFinder.service.ICredential;
+import com.aycf.flightFinder.service.LoadFlightsFilesService;
 import com.aycf.flightFinder.service.LoginService;
 import jakarta.servlet.http.HttpSession;
 import lombok.extern.slf4j.Slf4j;
@@ -25,12 +26,15 @@ import java.util.List;
 public class SeleniumAuthenticationProvider implements AuthenticationProvider {
     private final LoginService loginService;
     private final ICredential credentialService;
+    private final LoadFlightsFilesService loadFlightsFilesService;
 
     @Autowired
     public SeleniumAuthenticationProvider(LoginService loginService,
-                                          ICredential credentialService) {
+                                          ICredential credentialService,
+                                          LoadFlightsFilesService loadFlightsFilesService) {
         this.loginService = loginService;
         this.credentialService = credentialService;
+        this.loadFlightsFilesService = loadFlightsFilesService;
     }
     @Override
     public Authentication authenticate(Authentication authentication) throws AuthenticationException {
@@ -46,6 +50,7 @@ public class SeleniumAuthenticationProvider implements AuthenticationProvider {
         ServletRequestAttributes attr = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
         storeWebDriverInSession(attr, driver);
         storeCredentials(attr, email, password);
+        loadFlightsFilesService.loadUserFilesAsync();
 
         List<GrantedAuthority> authorities = List.of(new SimpleGrantedAuthority("ROLE_USER"));
         return new UsernamePasswordAuthenticationToken(email, password, authorities);

@@ -46,16 +46,35 @@ public class AppController {
                                 @RequestParam("date") String date,
                                 HttpSession session,
                                 Model model) {
-        driver = (WebDriver) session.getAttribute("webdriver");
+        setDriverFromSession(session);
         log.info("Searching flights with origin: " + origin_query + ", destination: " + dest_query + ", date: " + date);
         List<Flight> flights = flightSearchService.searchDirectFlight(driver, origin_query, origin_full, dest_query, dest_full, date);
-        handleFlights(flights, model, "no_direct_flights", "No Direct Flights Found");
+        handleFlights(flights, model, "no_flights", "No Direct Flights Found");
         model.addAttribute("show_results", true);
         model.addAttribute("origin_query", origin_query);
         model.addAttribute("origin_full", origin_full);
         model.addAttribute("dest_query", dest_query);
         model.addAttribute("dest_full", dest_full);
         model.addAttribute("date", date);
+        addUserToModel(session, model);
+        return "searchFlights";
+    }
+    @PostMapping("/search-next-days")
+    public String searchNextThreeDays(
+            @RequestParam("origin_query") String origin_query,
+            @RequestParam("origin_full") String origin_full,
+            @RequestParam("dest_query") String dest_query,
+            @RequestParam("dest_full") String dest_full,
+            HttpSession session,
+            Model model) {
+        setDriverFromSession(session);
+        List<Flight> flights = flightSearchService.searchNextThreeDaysFlights(origin_query, origin_full, dest_query, dest_full, session.getId());
+        handleFlights(flights, model, "no_flights", "No Flights Found in Next Three Days from " + origin_full + " to " + dest_full + "");
+        model.addAttribute("show_results", true);
+        model.addAttribute("origin_query", origin_query);
+        model.addAttribute("origin_full", origin_full);
+        model.addAttribute("dest_query", dest_query);
+        model.addAttribute("dest_full", dest_full);
         addUserToModel(session, model);
         return "searchFlights";
     }
@@ -68,17 +87,24 @@ public class AppController {
                                            HttpSession session,
                                            Model model) {
         log.info("Searching flights with connections from: " + origin_query + " to " + dest_query + " on " + date);
-        List<Flight> flights = flightSearchService.searchFlightsWithConnections(driver, origin_query, origin_full, dest_query, dest_full, date, session.getId());
-        handleFlights(flights, model, "no_connections", "No Connecting Flights Found");
+        List<Flight> flights = flightSearchService.searchFlightsWithConnections(origin_query, origin_full, dest_query, dest_full, date, session.getId());
+        handleFlights(flights, model, "no_flights", "No Connecting Flights Found");
+        model.addAttribute( "no_connections", true);
         model.addAttribute("origin_full", origin_full);
         model.addAttribute("dest_full", dest_full);
         model.addAttribute("date", date);
         addUserToModel(session, model);
         return "searchFlights";
     }
+    private void setDriverFromSession(HttpSession session) {
+        if(driver==null) {
+            driver = (WebDriver) session.getAttribute("webdriver");
+        }
+    }
     private void handleFlights(List<Flight> flights, Model model, String modelAttribute, String errorMessage) {
         if (flights.isEmpty()) {
             model.addAttribute(modelAttribute, true);
+            model.addAttribute("error_message", errorMessage);
             log.info(errorMessage);
         } else {
             model.addAttribute("flights", flights);

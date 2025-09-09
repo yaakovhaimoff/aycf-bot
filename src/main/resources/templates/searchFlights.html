@@ -58,6 +58,34 @@
     </form>
 </div>
 
+<!-- Search Next 3 Days Box -->
+<div class="container">
+    <form method="POST" th:action="@{/search-next-days}" class="search-form">
+        <div class="search-box">
+            <div>
+                <label for="originNext">From:</label>
+                <input type="text" id="originNext" placeholder="From (type to search)" autocomplete="off" required>
+                <input type="hidden" name="origin_query" id="origin_query_next">
+                <input type="hidden" name="origin_full" id="origin_full_next">
+            </div>
+
+            <div>
+                <label for="destinationNext">To:</label>
+                <input type="text" id="destinationNext" placeholder="To (type to search)" autocomplete="off" required>
+                <input type="hidden" name="dest_query" id="dest_query_next">
+                <input type="hidden" name="dest_full" id="dest_full_next">
+            </div>
+
+            <br/>
+
+            <div class="submit-container">
+                <button type="submit">Search Next 3 Days</button>
+            </div>
+            <div class="loader" style="display: none;"></div>
+        </div>
+    </form>
+</div>
+
 <!-- Results -->
 <div class="flight-header" th:if="${show_results}">
 
@@ -78,9 +106,9 @@
         </div>
     </div>
 
-    <div th:if="${no_direct_flights}">
-        <h1>No direct flights found for this date.</h1>
-        <div>
+    <div th:if="${no_flights}">
+        <h1 th:text="${error_message}"> </h1>
+        <div th:if="${no_connections}">
             <form method="POST" th:action="@{/search-connections}">
                 <input type="hidden" name="origin_query" th:value="${origin_query}" />
                 <input type="hidden" name="origin_full" th:value="${origin_full}" />
@@ -91,10 +119,6 @@
                 <div class="loader" style="display:none;"></div>
             </form>
         </div>
-    </div>
-
-    <div th:if="${no_connections}">
-        <h2>No connecting flights found for this route and date.</h2>
     </div>
 
 </div>

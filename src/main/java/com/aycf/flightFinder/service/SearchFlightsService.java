@@ -10,6 +10,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.openqa.selenium.WebDriver;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -19,6 +20,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import io.micrometer.core.annotation.Timed;
 
 @Slf4j
@@ -27,14 +29,23 @@ public class SearchFlightsService implements IFlightSearchService {
     private final ICredential credentialService;
     private List<Destination> possibleConnections;
     private static final AtomicInteger activeBrowsers = new AtomicInteger(0);
+    private final LoadFlightsFilesService loadFlightsFilesService;
+
     @Autowired
-    public SearchFlightsService(ICredential credentialService) {
+    public SearchFlightsService(ICredential credentialService,
+                                LoadFlightsFilesService loadFlightsFilesService) {
         this.credentialService = credentialService;
+        this.loadFlightsFilesService = loadFlightsFilesService;
     }
     @Override
     @Timed(value = "flightFinder.searchDirectFlight", description = "Time taken to search direct flights")
     public List<Flight> searchDirectFlight(WebDriver webDriver, String originQuery, String originFull,
                                            String destQuery, String destFull, String date) {
+        if (!hasRoute(originFull, destFull)) {
+            log.info("Route not found in parsed Wizz network: {} → {}", originFull, destFull);
+            return List.of();
+        }
+        log.info("Route is available from : {} → {} on {}", originFull, destFull, date);
         LoginPage loginPage = new LoginPage(webDriver);
         loginPage.openHomePage();
         SearchFlightsPage searchPage = new SearchFlightsPage(webDriver, originQuery, originFull, destQuery, destFull, date);
@@ -43,8 +54,7 @@ public class SearchFlightsService implements IFlightSearchService {
     }
     @Override
     @Timed(value = "flightFinder.searchFlightsWithConnections", description = "Time taken to search flights with connections")
-    public List<Flight> searchFlightsWithConnections(WebDriver webDriver,
-                                                     String originQuery, String originFull,
+    public List<Flight> searchFlightsWithConnections(String originQuery, String originFull,
                                                      String destQuery, String destFull,
                                                      String date, String sessionID) {
         int MAX_THREADS = 3;
@@ -137,6 +147,86 @@ public class SearchFlightsService implements IFlightSearchService {
         }
 
         return validFlights;
+    }
+    @Override
+    @Timed(value = "flightFinder.searchNextDayFlights", description = "Time taken to search next 3 day flights")
+    public List<Flight> searchNextThreeDaysFlights(String originQuery, String originFull,
+                                             String destQuery, String destFull, String sessionID) {
+        if (!hasRoute(originFull, destFull)) {
+            log.info("Route not found in parsed Wizz network: {} → {}", originFull, destFull);
+            return List.of();
+        }
+        log.info("Route is available from : {} → {}", originFull, destFull);
+        int MAX_THREADS = 3;
+        ExecutorService executor = Executors.newFixedThreadPool(MAX_THREADS);
+        List<Flight> allFlights = new ArrayList<>();
+        LocalDate baseDate = LocalDate.now();
+
+        List<Callable<List<Flight>>> tasks = IntStream.range(0, 4)
+                .mapToObj(i -> {
+                    String date = baseDate.plusDays(i).toString();
+                    return (Callable<List<Flight>>) () ->
+                            searchFlightsForDate(date, originQuery, originFull, destQuery, destFull, sessionID);
+                })
+                .toList();
+        try {
+            log.info("Launching threaded search for next 3 days with {} threads", MAX_THREADS);
+            List<Future<List<Flight>>> futures = executor.invokeAll(tasks);
+            for (Future<List<Flight>> future : futures) {
+                try {
+                    allFlights.addAll(future.get());
+                } catch (Exception e) {
+                    log.error("Error fetching flights from future: {}", e.getMessage(), e);
+                }
+            }
+        } catch (InterruptedException e) {
+            log.error("Thread pool interrupted: {}", e.getMessage(), e);
+            Thread.currentThread().interrupt();
+        } finally {
+            executor.shutdown();
+            log.info("Finished threaded search for next 3 days. Total flights found: {}", allFlights.size());
+        }
+        return allFlights;
+    }
+    private List<Flight> searchFlightsForDate(String date,
+                                              String originQuery, String originFull,
+                                              String destQuery, String destFull,
+                                              String sessionID) {
+        WebDriver driver = WebDriverFactory.createDriver(WebDriverFactory.BrowserType.CHROME);
+        int browsersNow = activeBrowsers.incrementAndGet();
+        log.info("[NextDay-{}] Browser opened. Active browsers: {}", date, browsersNow);
+
+        List<Flight> flights = new ArrayList<>();
+
+        try {
+            log.info("[NextDay-{}] Searching flights for: {} → {} on {}", date, originFull, destFull, date);
+            UserCredentials credentials = credentialService.get(sessionID);
+            LoginService loginService = new LoginService();
+            loginService.login(driver, credentials.email(), credentials.password());
+
+            SearchFlightsPage searchPage = new SearchFlightsPage(driver, originQuery, originFull, destQuery, destFull, date);
+            flights = checkFlightAvailability(searchPage);
+
+            log.info("[NextDay-{}] Found {} flights", date, flights.size());
+        } catch (Exception e) {
+            log.error("[NextDay-{}] Error during search: {}", date, e.getMessage(), e);
+        } finally {
+            driver.quit();
+            int remaining = activeBrowsers.decrementAndGet();
+            log.info("[NextDay-{}] Browser closed. Remaining browsers: {}", date, remaining);
+        }
+        return flights;
+    }
+    public boolean hasRoute(String origin, String destination) {
+        String cleanedOrigin = cleanCityName(origin);
+        String cleanedDestination = cleanCityName(destination);
+        List<String> destinations = loadFlightsFilesService.getParsedRoutes().get(cleanedOrigin);
+        return destinations != null && destinations.contains(cleanedDestination);
+    }
+    private String cleanCityName(String input) {
+        if (input == null || input.isBlank()) return "";
+        String[] words = input.trim().split("\\s+");
+        return words[0].replaceAll("[^\\p{L}]", " ").replaceAll("\\s+", " ").trim();
     }
     private List<Flight> checkFlightAvailability(SearchFlightsPage searchPage){
         searchPage.fillRoute();
