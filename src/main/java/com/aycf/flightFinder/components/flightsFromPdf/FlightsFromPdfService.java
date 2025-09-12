@@ -1,5 +1,6 @@
-package com.aycf.flightFinder.service;
+package com.aycf.flightFinder.components.flightsFromPdf;
 
+import com.aycf.flightFinder.model.Destination;
 import io.micrometer.core.annotation.Timed;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.PDDocument;
@@ -18,10 +19,10 @@ import java.util.*;
 
 @Slf4j
 @Service
-public class LoadFlightsFilesService {
+public class FlightsFromPdfService implements IFlightsFromPdfService {
     private Map<String, List<String>> parsedRoutes;
     private final Set<String> allCities = Set.of(
-            "Aalesund", "Aberdeen", "Alghero", "Alam", "Alicante", "Amman", "Antalya", "Athens", "Bacau", "Banja Luka",
+            "Aalesund", "Aberdeen", "Alghero", "Alam", "Alicante", "Amman", "Ancona", "Antalya", "Athens", "Bacau", "Banja Luka",
             "Barcelona", "Bari", "Basel/Mulhouse", "Belgrade", "Belfast", "Bergen", "Berlin", "Bilbao", "Billund", "Birmingham",
             "Bologna", "Bratislava", "Brussels", "Bucharest", "Burgas", "Budapest", "Catania", "Castellon", "Chania", "Chisinau",
             "Cluj", "Comiso", "Copenhagen", "Craiova", "Dalaman", "Debrecen", "Dortmund", "Dubrovnik", "Eindhoven", "Faro", "Frankfurt",
@@ -30,18 +31,16 @@ public class LoadFlightsFilesService {
             "Katowice", "Kerkyra", "Krakow", "Kutaisi", "Larnaca", "Leeds/Bradford", "Leipzig/Halle", "Lisbon",
             "Liverpool", "Ljubljana", "London", "Lublin", "Lyon", "Madeira", "Madinah", "Madrid", "Malaga", "Malmo", "Malta", "Marsa",
             "Memmingen", "Milan", "Mykonos", "Naples", "Nice", "Nuremberg", "Ohrid", "Olbia", "Oslo", "Palma De Mallorca",
-            "Paris", "Perugia", "Pescara", "Pisa", "Podgorica", "Porto", "Poznan", "Prague", "Pristina", "Reykjavik", "Rimini",
+            "Paris", "Perugia", "Pescara", "Pisa", "Podgorica", "Porto", "Poznan", "Prague", "Pristina", "Radom", "Reykjavik", "Rimini",
             "Rhodes", "Rome", "Rzeszow", "Salerno", "Santorini", "Sarajevo", "Sevilla", "Sharm el-Sheikh", "Sibiu", "Skopje",
-            "Sofia", "Split", "Stavanger", "Stockholm", "Stuttgart", "Targu-Mures", "Tel Aviv", "Tenerife", "Thessaloniki",
+            "Sofia", "Split", "Stavanger", "Stockholm", "Stuttgart", "Szczecin", "Targu-Mures", "Tel Aviv", "Tenerife", "Thessaloniki",
             "Timisoara", "Tirana", "Trieste", "Tromso", "Trondheim", "Turin", "Turku", "Tuzla", "Valencia", "Varna", "Venice", "Verona",
             "Vienna", "Vilnius", "Warsaw", "Wroclaw", "Yerevan", "Zakinthos Island", "Zaragoza");
+    @Override
     @Async
-    @Timed(value = "LoadFlightsFilesService.time", description = "Time taken to load flights files asynchronously")
-    public void loadUserFilesAsync() {
+    @Timed(value = "LoadFlightsPdfFile.time", description = "Time taken to load flights pdf file asynchronously")
+    public void loadFlightsFromPdfAsync() {
         downloadPdf();
-    }
-    public Map<String, List<String>> getParsedRoutes() {
-        return parsedRoutes;
     }
     private void downloadPdf() {
         String pdfUrl = "https://multipass.wizzair.com/aycf-availability.pdf";
@@ -76,9 +75,9 @@ public class LoadFlightsFilesService {
                         .findFirst();
                 if (match.isPresent()) {
                     String rawFrom = match.get();
-                    String cleanedFrom = cleanCityName(rawFrom);
+                    String cleanedFrom = replaceNotLettersWithSpaces(rawFrom);
                     String to = line.substring(rawFrom.length()).trim();
-                    String cleanedTo = cleanCityName(to);
+                    String cleanedTo = replaceNotLettersWithSpaces(to);
                     routesMap.computeIfAbsent(cleanedFrom, k -> new ArrayList<>()).add(cleanedTo);
                 }
 //                else {
@@ -88,7 +87,51 @@ public class LoadFlightsFilesService {
         }
         return routesMap;
     }
-    private String cleanCityName(String city) {
+    @Override
+    public boolean hasRoute(String origin, String destination) {
+        String cleanedOrigin = cleanCityName(origin);
+        String cleanedDestination = cleanCityName(destination);
+        log.info("Checking route from '{}' to '{}'", cleanedOrigin, cleanedDestination);
+        List<String> destinations = parsedRoutes.get(cleanedOrigin);
+        return destinations != null && destinations.contains(cleanedDestination);
+    }
+    private String cleanCityName(String FullCityName) {
+        log.info("Cleaning city name: '{}'", FullCityName);
+        if (FullCityName == null || FullCityName.isBlank()) return "";
+        String cityName = FullCityName.split("\\(")[0].trim();
+        cityName = replaceNotLettersWithSpaces(cityName);
+        for (String city : allCities) {
+            if (cityName.equalsIgnoreCase(city) || cityName.toLowerCase().startsWith(city.toLowerCase())) {
+                log.info("Matched city name: '{}' for {}", city, FullCityName);
+                return city;
+            }
+        }
+        log.info("City '{}' not found in known cities list.", cityName);
+        return "";
+    }
+    private String replaceNotLettersWithSpaces(String city) {
         return city.replaceAll("[^\\p{L}]", " ").replaceAll("\\s+", " ").trim();
+    }
+    @Override
+    @Timed(value = "FlightsFromPdfService.getPossibleConnections.time", description = "Time taken to get possible connections from PDF")
+    public List<Destination> getPossibleConnections(String originFull, String destinationFull, List<Destination> possibleConnections) {
+        String origin = cleanCityName(originFull);
+        String destination = cleanCityName(destinationFull);
+        log.info("Finding connections from '{}' to '{}', with possible connections: {}", origin, destination, possibleConnections);
+
+        List<String> validMidCities = parsedRoutes.getOrDefault(origin, List.of()).stream()
+                .filter(mid -> parsedRoutes.getOrDefault(mid, List.of()).contains(destination))
+                .toList();
+
+        log.info("Valid mid cities: {}", validMidCities);
+
+        List<Destination> connections = validMidCities.stream()
+                .flatMap(mid -> possibleConnections.stream()
+                        .filter(con -> cleanCityName(con.destinationFull()).equalsIgnoreCase(mid))
+                        .map(con -> new Destination(con.destinationQuery(), con.destinationFull()))
+                )
+                .toList();
+        log.info("Parsed PDF: Found {} possible connections from '{}' to '{}', connections are: {}", connections.size(), origin, destination, connections);
+        return connections;
     }
 }

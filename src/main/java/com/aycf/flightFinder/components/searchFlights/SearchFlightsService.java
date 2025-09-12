@@ -1,8 +1,11 @@
-package com.aycf.flightFinder.service;
+package com.aycf.flightFinder.components.searchFlights;
 
 import com.aycf.flightFinder.automation.pages.LoginPage;
 import com.aycf.flightFinder.automation.pages.SearchFlightsPage;
 import com.aycf.flightFinder.automation.webdriver.WebDriverFactory;
+import com.aycf.flightFinder.components.flightsFromPdf.IFlightsFromPdfService;
+import com.aycf.flightFinder.components.login.LoginService;
+import com.aycf.flightFinder.components.UserCredentials.ICredential;
 import com.aycf.flightFinder.model.Destination;
 import com.aycf.flightFinder.model.Flight;
 import com.aycf.flightFinder.model.UserCredentials;
@@ -25,31 +28,31 @@ import io.micrometer.core.annotation.Timed;
 
 @Slf4j
 @Service
-public class SearchFlightsService implements IFlightSearchService {
+public class SearchFlightsService implements ISearchFlightsService {
     private final ICredential credentialService;
-    private List<Destination> possibleConnections;
+    private List<Destination> possibleConnectionsFromUI;
     private static final AtomicInteger activeBrowsers = new AtomicInteger(0);
-    private final LoadFlightsFilesService loadFlightsFilesService;
+    private final IFlightsFromPdfService FlightsFromPdfService;
 
     @Autowired
     public SearchFlightsService(ICredential credentialService,
-                                LoadFlightsFilesService loadFlightsFilesService) {
+                                IFlightsFromPdfService FlightsFromPdfService) {
         this.credentialService = credentialService;
-        this.loadFlightsFilesService = loadFlightsFilesService;
+        this.FlightsFromPdfService = FlightsFromPdfService;
     }
     @Override
     @Timed(value = "flightFinder.searchDirectFlight", description = "Time taken to search direct flights")
     public List<Flight> searchDirectFlight(WebDriver webDriver, String originQuery, String originFull,
                                            String destQuery, String destFull, String date) {
-        if (!hasRoute(originFull, destFull)) {
+        LoginPage loginPage = new LoginPage(webDriver);
+        loginPage.openHomePage();
+        SearchFlightsPage searchPage = new SearchFlightsPage(webDriver, originQuery, originFull, destQuery, destFull, date);
+        possibleConnectionsFromUI = getPossibleConnectionsFromUI(searchPage, originQuery, originFull, destQuery, destFull);
+        if (!FlightsFromPdfService.hasRoute(originFull, destFull)) {
             log.info("Route not found in parsed Wizz network: {} → {}", originFull, destFull);
             return List.of();
         }
         log.info("Route is available from : {} → {} on {}", originFull, destFull, date);
-        LoginPage loginPage = new LoginPage(webDriver);
-        loginPage.openHomePage();
-        SearchFlightsPage searchPage = new SearchFlightsPage(webDriver, originQuery, originFull, destQuery, destFull, date);
-        possibleConnections = getPossibleConnections(searchPage, originQuery, originFull, destQuery, destFull);
         return checkFlightAvailability(searchPage);
     }
     @Override
@@ -60,6 +63,7 @@ public class SearchFlightsService implements IFlightSearchService {
         int MAX_THREADS = 3;
         ExecutorService executor = Executors.newFixedThreadPool(MAX_THREADS);
         AtomicInteger counter = new AtomicInteger(0);
+        List<Destination> possibleConnections = FlightsFromPdfService.getPossibleConnections(originFull, destFull, this.possibleConnectionsFromUI);
         List<Callable<List<Flight>>> tasks = possibleConnections.stream()
                 .map(connection -> (Callable<List<Flight>>) () -> {
                     int ConnectionNumber = counter.getAndIncrement();
@@ -152,7 +156,7 @@ public class SearchFlightsService implements IFlightSearchService {
     @Timed(value = "flightFinder.searchNextDayFlights", description = "Time taken to search next 3 day flights")
     public List<Flight> searchNextThreeDaysFlights(String originQuery, String originFull,
                                              String destQuery, String destFull, String sessionID) {
-        if (!hasRoute(originFull, destFull)) {
+        if (!FlightsFromPdfService.hasRoute(originFull, destFull)) {
             log.info("Route not found in parsed Wizz network: {} → {}", originFull, destFull);
             return List.of();
         }
@@ -217,24 +221,13 @@ public class SearchFlightsService implements IFlightSearchService {
         }
         return flights;
     }
-    public boolean hasRoute(String origin, String destination) {
-        String cleanedOrigin = cleanCityName(origin);
-        String cleanedDestination = cleanCityName(destination);
-        List<String> destinations = loadFlightsFilesService.getParsedRoutes().get(cleanedOrigin);
-        return destinations != null && destinations.contains(cleanedDestination);
-    }
-    private String cleanCityName(String input) {
-        if (input == null || input.isBlank()) return "";
-        String[] words = input.trim().split("\\s+");
-        return words[0].replaceAll("[^\\p{L}]", " ").replaceAll("\\s+", " ").trim();
-    }
     private List<Flight> checkFlightAvailability(SearchFlightsPage searchPage){
         searchPage.fillRoute();
         searchPage.selectDate();
         searchPage.clickSearch();
         return searchPage.scrapeResults();
     }
-    private List<Destination> getPossibleConnections(SearchFlightsPage searchPage, String originQuery, String originFull,
+    private List<Destination> getPossibleConnectionsFromUI(SearchFlightsPage searchPage, String originQuery, String originFull,
                                                     String destQuery, String destFull ){
         log.info("Getting destinations for origin: '{}'", originFull);
         List<Destination> originToConnectionDestinations = searchPage.getAvailableDestinations("autocomplete-origin", "autocomplete-destination", originQuery, originFull);

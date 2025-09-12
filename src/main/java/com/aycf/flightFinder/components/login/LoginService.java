@@ -1,4 +1,4 @@
-package com.aycf.flightFinder.service;
+package com.aycf.flightFinder.components.login;
 
 import com.aycf.flightFinder.automation.pages.LoginPage;
 import io.micrometer.core.annotation.Timed;

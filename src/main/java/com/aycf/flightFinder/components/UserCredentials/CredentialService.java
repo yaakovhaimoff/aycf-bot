@@ -1,4 +1,4 @@
-package com.aycf.flightFinder.service;
+package com.aycf.flightFinder.components.UserCredentials;
 
 import com.aycf.flightFinder.model.UserCredentials;
 import org.springframework.stereotype.Service;

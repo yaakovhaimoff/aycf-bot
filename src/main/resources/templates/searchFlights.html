@@ -108,7 +108,7 @@
 
     <div th:if="${no_flights}">
         <h1 th:text="${error_message}"> </h1>
-        <div th:if="${no_connections}">
+        <div th:if="${no_direct_flight}">
             <form method="POST" th:action="@{/search-connections}">
                 <input type="hidden" name="origin_query" th:value="${origin_query}" />
                 <input type="hidden" name="origin_full" th:value="${origin_full}" />
