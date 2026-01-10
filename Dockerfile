@@ -1,16 +1,14 @@
+# Use an official OpenJDK base image
 FROM openjdk:17-jdk-slim
 
+# Set working directory
 WORKDIR /app
 
-COPY .mvn/ .mvn
-COPY mvnw pom.xml ./
+# Copy the JAR file (adjust target path if needed)
+COPY target/flightFinder-*.jar app.jar
 
-RUN ./mvnw dependency:resolve
-
-COPY src ./src
-
-RUN ./mvnw package -DskipTests
-
+# Expose the port your app runs on (adjust if not 8080)
 EXPOSE 8080
 
-CMD ["java", "-jar", "target/flightFinder-0.0.1-SNAPSHOT.jar"]
+# Run the application
+ENTRYPOINT ["java", "-jar", "app.jar"]

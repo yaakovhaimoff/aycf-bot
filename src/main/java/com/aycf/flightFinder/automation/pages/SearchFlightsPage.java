@@ -1,7 +1,8 @@
 package com.aycf.flightFinder.automation.pages;
 
-import com.aycf.flightFinder.model.Destination;
-import com.aycf.flightFinder.model.Flight;
+import com.aycf.flightFinder.controller.model.SearchRequest;
+import com.aycf.flightFinder.features.searchFlights.model.Destination;
+import com.aycf.flightFinder.features.searchFlights.model.Flight;
 import org.openqa.selenium.By;
 import org.openqa.selenium.StaleElementReferenceException;
 import org.openqa.selenium.WebDriver;
@@ -23,14 +24,14 @@ public class SearchFlightsPage {
     private final String destQuery;
     private final String destFull;
     private final String date;
-    public SearchFlightsPage(WebDriver driver, String originQuery, String originFull, String destQuery, String destFull, String date) {
+    public SearchFlightsPage(WebDriver driver, SearchRequest searchRequest) {
         this.driver = driver;
         this.wait = new WebDriverWait(driver, Duration.ofSeconds(20));
-        this.originQuery = originQuery;
-        this.originFull = originFull;
-        this.destQuery = destQuery;
-        this.destFull = destFull;
-        this.date = date;
+        this.originQuery = searchRequest.originQuery();
+        this.originFull = searchRequest.originFull();
+        this.destQuery = searchRequest.destQuery();
+        this.destFull = searchRequest.destFull();
+        this.date = searchRequest.date();
     }
 
     public List<Destination> getAvailableDestinations(String inputIdPrefix, String destinationIdPrefix, String originQuery, String originFull) {

@@ -28,7 +28,7 @@
 
 <!-- Search Box -->
 <div class="container">
-    <form method="POST" th:action="@{/search}" class="search-form">
+    <form id="search-form" class="search-form">
         <div class="search-box">
             <div>
                 <label for="origin">From:</label>
@@ -60,7 +60,7 @@
 
 <!-- Search Next 3 Days Box -->
 <div class="container">
-    <form method="POST" th:action="@{/search-next-days}" class="search-form">
+    <form id="next-days-form" class="search-form">
         <div class="search-box">
             <div>
                 <label for="originNext">From:</label>
@@ -109,7 +109,7 @@
     <div th:if="${no_flights}">
         <h1 th:text="${error_message}"> </h1>
         <div th:if="${no_direct_flight}">
-            <form method="POST" th:action="@{/search-connections}">
+            <form id="connections-form" class="search-form">
                 <input type="hidden" name="origin_query" th:value="${origin_query}" />
                 <input type="hidden" name="origin_full" th:value="${origin_full}" />
                 <input type="hidden" name="dest_query" th:value="${dest_query}" />
@@ -134,6 +134,7 @@
 <script th:src="@{/js/autocomplete.js}"></script>
 <script th:src="@{/js/datepicker-limit.js}"></script>
 <script th:src="@{/js/loader.js}"></script>
+<script th:src="@{/js/formSubmit.js}"></script>
 
 </body>
 </html>

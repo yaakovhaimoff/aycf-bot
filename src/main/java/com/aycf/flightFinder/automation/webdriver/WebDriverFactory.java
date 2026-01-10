@@ -21,8 +21,8 @@ public class WebDriverFactory {
             switch ( browserType ) {
                 case CHROME:
                     ChromeOptions chromeOptions = new ChromeOptions();
-                    chromeOptions.addArguments("--no-sandbox", "--disable-dev-shm-usage");
-                    chromeOptions.addArguments("--headless", "--no-sandbox", "--disable-dev-shm-usage");
+                    chromeOptions.addArguments("--no-sandbox", "--disable-dev-shm-usage", "--incognito");
+//                    chromeOptions.addArguments("--headless", "--no-sandbox", "--disable-dev-shm-usage", "--incognito");
                     return new ChromeDriver( chromeOptions );
 
                 case FIREFOX:

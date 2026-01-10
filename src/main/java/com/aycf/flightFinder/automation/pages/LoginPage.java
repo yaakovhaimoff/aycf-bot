@@ -34,6 +34,7 @@ public class LoginPage {
     public boolean isLoginErrorDisplayed() {
         try {
             WebElement error = driver.findElement(By.id("input-error"));
+            wait.until(ExpectedConditions.visibilityOf(error));
             return error.isDisplayed() && error.getText().toLowerCase().contains("invalid email address or password");
         } catch (Exception e) {
             return false;
