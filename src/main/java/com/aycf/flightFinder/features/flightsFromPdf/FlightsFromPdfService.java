@@ -1,16 +1,23 @@
 package com.aycf.flightFinder.features.flightsFromPdf;
 
+import com.aycf.flightFinder.automation.webdriver.WebDriverSessionManager;
 import com.aycf.flightFinder.features.searchFlights.model.Destination;
 import io.micrometer.core.annotation.Timed;
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.text.PDFTextStripper;
+import org.openqa.selenium.Cookie;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.scheduling.annotation.Async;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Paths;
@@ -19,42 +26,101 @@ import java.util.*;
 
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class FlightsFromPdfService implements IFlightsFromPdfService {
-    private Map<String, List<String>> parsedRoutes;
+
+    private final WebDriverSessionManager sessionManager;
+
+    @Value("${app.admin.user}")
+    private String adminUser;
+
+    @Value("${app.admin.password}")
+    private String adminPassword;
+    private Map<String, List<String>> parsedRoutes = new HashMap<>();
     private final Set<String> allCities = Set.of(
-            "Aalesund", "Aberdeen", "Alghero", "Alam", "Alicante", "Amman", "Ancona", "Antalya", "Athens", "Bacau", "Banja Luka",
-            "Barcelona", "Bari", "Basel/Mulhouse", "Belgrade", "Belfast", "Bergen", "Berlin", "Bilbao", "Billund", "Birmingham",
-            "Bologna", "Bratislava", "Brussels", "Bucharest", "Burgas", "Budapest", "Catania", "Castellon", "Chania", "Chisinau",
-            "Cluj", "Comiso", "Copenhagen", "Craiova", "Dalaman", "Debrecen", "Dortmund", "Dubrovnik", "Eindhoven", "Faro", "Frankfurt",
-            "Friedrichshafen", "Fuerteventura", "Gdansk", "Genoa", "Girona", "Glasgow", "Gothenburg", "Gran Canaria",
-            "Hamburg", "Haugesund", "Heraklion", "Hurghada", "Iasi", "Ibiza", "Istanbul", "Jeddah", "Karlsruhe/Baden-Baden",
-            "Katowice", "Kerkyra", "Krakow", "Kutaisi", "Larnaca", "Leeds/Bradford", "Leipzig/Halle", "Lisbon",
-            "Liverpool", "Ljubljana", "London", "Lublin", "Lyon", "Madeira", "Madinah", "Madrid", "Malaga", "Malmo", "Malta", "Marsa",
-            "Memmingen", "Milan", "Mykonos", "Naples", "Nice", "Nuremberg", "Ohrid", "Olbia", "Oslo", "Palma De Mallorca",
-            "Paris", "Perugia", "Pescara", "Pisa", "Podgorica", "Porto", "Poznan", "Prague", "Pristina", "Radom", "Reykjavik", "Rimini",
-            "Rhodes", "Rome", "Rzeszow", "Salerno", "Santorini", "Sarajevo", "Sevilla", "Sharm el-Sheikh", "Sibiu", "Skopje",
-            "Sofia", "Split", "Stavanger", "Stockholm", "Stuttgart", "Szczecin", "Targu-Mures", "Tel Aviv", "Tenerife", "Thessaloniki",
-            "Timisoara", "Tirana", "Trieste", "Tromso", "Trondheim", "Turin", "Turku", "Tuzla", "Valencia", "Varna", "Venice", "Verona",
-            "Vienna", "Vilnius", "Warsaw", "Wroclaw", "Yerevan", "Zakinthos Island", "Zaragoza");
+            "Aalesund", "Aberdeen", "Abu Dhabi", "Agadir", "Alghero", "Alam", "Alicante", "Amman", "Ancona", "Antalya", "Athens",
+            "Bacau", "Baku", "Banja Luka", "Barcelona", "Bari", "Basel/Mulhouse", "Belgrade", "Belfast", "Bergen", "Berlin", "Bilbao",
+            "Billund", "Birmingham", "Bologna", "Bordeaux", "Bratislava", "Brindisi", "Brussels", "Bucharest", "Burgas", "Budapest",
+            "Catania", "Castellon", "Chania", "Chisinau", "Cluj", "Cologne/Bonn", "Comiso", "Copenhagen", "Craiova",
+            "Dalaman", "Debrecen", "Dortmund", "Dubrovnik", "Dubai",
+            "Eindhoven",
+            "Faro", "Frankfurt", "Friedrichshafen", "Fuerteventura",
+            "Gdansk", "Genoa", "Girona", "Giza", "Glasgow", "Gothenburg", "Gran Canaria", "Gyumri",
+            "Hamburg", "Haugesund", "Heraklion", "Hurghada",
+            "Iasi", "Ibiza", "Istanbul",
+            "Jeddah",
+            "Karlsruhe/Baden-Baden", "Katowice", "Kerkyra", "Krakow", "Kutaisi",
+            "Lamezia", "Larnaca", "Leeds/Bradford", "Leipzig/Halle", "Lisbon",
+            "Liverpool", "Ljubljana", "London", "Lublin", "Lyon",
+            "Maastricht", "Madeira", "Madinah", "Madrid", "Malaga", "Malmo", "Malta", "Marrakech", "Marsa", "Memmingen", "Milan", "Mykonos",
+            "Naples", "Nice", "Nis", "Nuremberg",
+            "Ohrid", "Olbia", "Oslo",
+            "Palermo", "Palma De Mallorca", "Paris", "Paphos", "Perugia", "Pescara", "Pisa", "Podgorica", "Poprad/Tatry", "Porto", "Poznan", "Prague", "Pristina",
+            "Radom", "Reykjavik", "Rimini", "Rhodes", "Rome", "Rzeszow",
+            "Salerno", "Santorini", "Sarajevo", "Sevilla", "Sharm el-Sheikh", "Sibiu", "Skopje", "Sofia", "Split", "Stavanger", "Suceava",
+            "Stockholm", "Stuttgart", "Szczecin",
+            "Tallinn", "Targu-Mures", "Tel Aviv", "Tenerife", "Thessaloniki", "Timisoara", "Tirana", "Trieste", "Tromso", "Trondheim", "Turin", "Turku", "Tuzla",
+            "Valencia", "Varna", "Venice", "Verona", "Vienna", "Vilnius",
+            "Warsaw", "Wroclaw", "Yerevan",
+            "Zakinthos Island", "Zaragoza");
+    @PostConstruct
+    public void init() {
+        log.info("Loading routes PDF on startup");
+        downloadPdf();
+    }
+    @Scheduled(cron = "0 0 7 * * *")
+    public void scheduledPdfDownload() {
+        log.info("Scheduled PDF download triggered at 7:00 AM");
+        downloadPdf();
+    }
     @Override
     @Async
     @Timed(value = "LoadFlightsPdfFile.time", description = "Time taken to load flights pdf file asynchronously")
     public void loadFlightsFromPdfAsync() {
+        System.out.println("Async PDF download started");
         downloadPdf();
     }
     private void downloadPdf() {
         String pdfUrl = "https://multipass.wizzair.com/aycf-availability.pdf";
-        try (InputStream in = new URL(pdfUrl).openStream()) {
-            String destinationPath = "wizzair-network.pdf";
-            Files.copy(in, Paths.get(destinationPath), StandardCopyOption.REPLACE_EXISTING);
-            parsedRoutes = parseRoutes(destinationPath, allCities);
-            log.info("Parsed routes size: " + parsedRoutes.size() + "");
-//            parsedRoutes.forEach((from, toList) -> {
-//                log.info("Flight from " + from + " → " + toList);
-//            });
-        } catch (IOException e) {
-            log.error("Failed to download PDF from URL: " + pdfUrl, e);
+        String destinationPath = "wizzair-network.pdf";
+
+        try {
+            log.info("Downloading PDF with admin credentials: {}", adminUser);
+
+            sessionManager.executeWithAuth(adminUser, adminPassword, driver -> {
+                try {
+                    Set<Cookie> cookies = driver.manage().getCookies();
+                    String cookieHeader = buildCookieHeader(cookies);
+
+                    log.info("Downloading PDF with authenticated session");
+                    HttpURLConnection connection = (HttpURLConnection) new URL(pdfUrl).openConnection();
+                    connection.setRequestProperty("Cookie", cookieHeader);
+                    connection.setRequestMethod("GET");
+
+                    try (InputStream in = connection.getInputStream()) {
+                        Files.copy(in, Paths.get(destinationPath), StandardCopyOption.REPLACE_EXISTING);
+                    }
+
+                    parsedRoutes = parseRoutes(destinationPath, allCities);
+                    log.info("Parsed routes size: {}", parsedRoutes.size());
+
+                } catch (IOException e) {
+                    log.error("Failed to download/parse PDF: {}", e.getMessage(), e);
+                }
+            });
+
+        } catch (Exception e) {
+            log.error("Failed to download PDF from URL: {}", pdfUrl, e);
         }
+    }
+
+    private String buildCookieHeader(Set<Cookie> cookies) {
+        StringBuilder sb = new StringBuilder();
+        for (Cookie cookie : cookies) {
+            if (sb.length() > 0) sb.append("; ");
+            sb.append(cookie.getName()).append("=").append(cookie.getValue());
+        }
+        return sb.toString();
     }
     private Map<String, List<String>> parseRoutes(String pdfPath, Set<String> knownCities) throws IOException {
         Map<String, List<String>> routesMap = new HashMap<>();
@@ -80,9 +146,9 @@ public class FlightsFromPdfService implements IFlightsFromPdfService {
                     String cleanedTo = replaceNotLettersWithSpaces(to);
                     routesMap.computeIfAbsent(cleanedFrom, k -> new ArrayList<>()).add(cleanedTo);
                 }
-//                else {
-//                    log.warn("No matching city found for line: " + line);
-//                }
+                else {
+                    log.warn("No matching city found for line: " + line);
+                }
             }
         }
         return routesMap;

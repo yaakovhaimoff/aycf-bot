@@ -152,13 +152,14 @@ public class SearchFlightsPage {
     public List<Flight> scrapeResults() {
         log.info("Waiting for flight results to load...");
         try {
-            Thread.sleep(3000);
-        } catch (InterruptedException e) {
-            log.error("Sleep interrupted: {}", e.getMessage());
-        }
-        log.info("Scraping results...");
+            wait.until(driver -> {
+                List<WebElement> results = driver.findElements(By.className("CvoCollapsibleDirectFlightRow-content"));
+                List<WebElement> noResults = driver.findElements(By.cssSelector("article.AvailabilityPage-noResultMessage"));
+                return !results.isEmpty() || !noResults.isEmpty();
+            });
 
-        try {
+            log.info("Page loaded, scraping results...");
+
             List<WebElement> noResults = driver.findElements(By.cssSelector("article.AvailabilityPage-noResultMessage"));
             if (!noResults.isEmpty()) {
                 log.info("No flights found for the selected date.");
@@ -174,7 +175,7 @@ public class SearchFlightsPage {
             log.info("Found {} flight(s):", flights.size());
             return flights.stream().map(this::parseFlight).toList();
         } catch (Exception e) {
-            log.error("Unexpected error while scraping results: {}", e.getMessage());
+            log.error("Timeout or error waiting for results: {}", e.getMessage());
             return List.of();
         }
     }

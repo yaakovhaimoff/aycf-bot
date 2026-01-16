@@ -2,18 +2,16 @@ package com.aycf.flightFinder.features.searchFlights;
 
 import com.aycf.flightFinder.automation.pages.LoginPage;
 import com.aycf.flightFinder.automation.pages.SearchFlightsPage;
-import com.aycf.flightFinder.automation.webdriver.WebDriverFactory;
+import com.aycf.flightFinder.automation.webdriver.WebDriverSessionManager;
 import com.aycf.flightFinder.controller.model.SearchRequest;
 import com.aycf.flightFinder.features.UserCredentials.WizzCredentialProvider;
 import com.aycf.flightFinder.features.UserCredentials.WizzCredentialProvider.WizzCredentials;
 import com.aycf.flightFinder.features.flightsFromPdf.IFlightsFromPdfService;
-import com.aycf.flightFinder.features.login.LoginService;
 import com.aycf.flightFinder.features.searchFlights.model.Destination;
 import com.aycf.flightFinder.features.searchFlights.model.Flight;
 import io.micrometer.core.annotation.Timed;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.openqa.selenium.WebDriver;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
@@ -29,14 +27,10 @@ import java.util.stream.IntStream;
 @Service
 @RequiredArgsConstructor
 public class SearchFlightsService implements ISearchFlightsService {
-
     private final WizzCredentialProvider credentialProvider;
     private final IFlightsFromPdfService flightsFromPdfService;
-    private final LoginService loginService;
-
-    private static final AtomicInteger activeBrowsers = new AtomicInteger(0);
-    private static final int MAX_THREADS = 3;
-
+    private final WebDriverSessionManager sessionManager;
+    private final int MAX_THREADS = 3;
     @Override
     @Timed(value = "flightFinder.searchDirectFlight", description = "Time taken to search direct flights")
     public List<Flight> searchDirectFlight(SearchRequest searchRequest) {
@@ -51,19 +45,21 @@ public class SearchFlightsService implements ISearchFlightsService {
 
         log.info("Route is available: {} -> {} on {}", originFull, destFull, date);
         WizzCredentials credentials = credentialProvider.getCredentialsForCurrentUser();
-        WebDriver driver = null;
 
         try {
-            driver = createAndLoginDriver(credentials);
-            LoginPage loginPage = new LoginPage(driver);
-            loginPage.openHomePage();
-            SearchFlightsPage searchPage = new SearchFlightsPage(driver, searchRequest);
-            return checkFlightAvailability(searchPage);
+            return sessionManager.executeWithAuth(
+                    credentials.email(),
+                    credentials.password(),
+                    driver -> {
+                        LoginPage loginPage = new LoginPage(driver);
+                        loginPage.openHomePage();
+                        SearchFlightsPage searchPage = new SearchFlightsPage(driver, searchRequest);
+                        return checkFlightAvailability(searchPage);
+                    }
+            );
         } catch (Exception e) {
             log.error("Error searching direct flight: {}", e.getMessage(), e);
             return List.of();
-        } finally {
-            closeDriver(driver);
         }
     }
 
@@ -72,7 +68,6 @@ public class SearchFlightsService implements ISearchFlightsService {
     public List<Flight> searchFlightsWithConnections(SearchRequest searchRequest) {
         WizzCredentials credentials = credentialProvider.getCredentialsForCurrentUser();
 
-        // Get possible connections - done in a separate browser to avoid thread safety issues
         List<Destination> possibleConnectionsFromUI = getPossibleConnectionsThreadSafe(searchRequest, credentials);
 
         List<Destination> validConnections = flightsFromPdfService.getPossibleConnections(
@@ -137,7 +132,7 @@ public class SearchFlightsService implements ISearchFlightsService {
         ExecutorService executor = Executors.newFixedThreadPool(MAX_THREADS);
         LocalDate baseDate = LocalDate.now();
 
-        List<Callable<List<Flight>>> tasks = IntStream.range(0, 4)
+        List<Callable<List<Flight>>> tasks = IntStream.range(0, 1)
                 .mapToObj(i -> {
                     String date = baseDate.plusDays(i).toString();
                     SearchRequest datedRequest = new SearchRequest(
@@ -172,55 +167,29 @@ public class SearchFlightsService implements ISearchFlightsService {
         return allFlights;
     }
 
-    // === Private helper methods (all thread-safe, no shared mutable state) ===
-
-    private WebDriver createAndLoginDriver(WizzCredentials credentials) {
-        WebDriver driver = WebDriverFactory.createDriver(WebDriverFactory.BrowserType.CHROME);
-        int browsersNow = activeBrowsers.incrementAndGet();
-        log.debug("Browser opened. Active browsers: {}", browsersNow);
-
-        try {
-            loginService.login(driver, credentials.email(), credentials.password());
-            return driver;
-        } catch (Exception e) {
-            driver.quit();
-            activeBrowsers.decrementAndGet();
-            throw e;
-        }
-    }
-
-    private void closeDriver(WebDriver driver) {
-        if (driver != null) {
-            try {
-                driver.quit();
-            } finally {
-                int remaining = activeBrowsers.decrementAndGet();
-                log.debug("Browser closed. Remaining browsers: {}", remaining);
-            }
-        }
-    }
-
     private List<Flight> searchFlightsForDate(SearchRequest searchRequest, WizzCredentials credentials) {
         String date = searchRequest.date();
-        WebDriver driver = null;
 
         try {
-            driver = createAndLoginDriver(credentials);
-            log.info("[NextDay-{}] Searching flights for: {} -> {}",
-                    date, searchRequest.originFull(), searchRequest.destFull());
+            return sessionManager.executeWithAuth(
+                    credentials.email(),
+                    credentials.password(),
+                    driver -> {
+                        log.info("[NextDay-{}] Searching flights for: {} -> {}",
+                                date, searchRequest.originFull(), searchRequest.destFull());
 
-            LoginPage loginPage = new LoginPage(driver);
-            loginPage.openHomePage();
-            SearchFlightsPage searchPage = new SearchFlightsPage(driver, searchRequest);
-            List<Flight> flights = checkFlightAvailability(searchPage);
+                        LoginPage loginPage = new LoginPage(driver);
+                        loginPage.openHomePage();
+                        SearchFlightsPage searchPage = new SearchFlightsPage(driver, searchRequest);
+                        List<Flight> flights = checkFlightAvailability(searchPage);
 
-            log.info("[NextDay-{}] Found {} flights", date, flights.size());
-            return flights;
+                        log.info("[NextDay-{}] Found {} flights", date, flights.size());
+                        return flights;
+                    }
+            );
         } catch (Exception e) {
             log.error("[NextDay-{}] Error during search: {}", date, e.getMessage(), e);
             return List.of();
-        } finally {
-            closeDriver(driver);
         }
     }
 
@@ -236,67 +205,69 @@ public class SearchFlightsService implements ISearchFlightsService {
         log.info("[Connection-{}] Starting: {} -> {} -> {}",
                 connectionNumber, originFull, connectionFull, destFull);
 
-        WebDriver driver = null;
-        List<Flight> validFlights = new ArrayList<>();
-
         try {
-            driver = createAndLoginDriver(credentials);
+            return sessionManager.executeWithAuth(
+                    credentials.email(),
+                    credentials.password(),
+                    driver -> {
+                        List<Flight> validFlights = new ArrayList<>();
 
-            // First leg: origin -> connection
-            log.info("[Connection-{}] Searching first-leg: {} -> {}", connectionNumber, originFull, connectionFull);
-            LoginPage loginPage = new LoginPage(driver);
-            loginPage.openHomePage();
-            List<Flight> firstLegFlights = checkFlightAvailability(
-                    new SearchFlightsPage(driver, searchRequest)
+                        log.info("[Connection-{}] Searching first-leg: {} -> {}", connectionNumber, originFull, connectionFull);
+                        LoginPage loginPage = new LoginPage(driver);
+                        loginPage.openHomePage();
+                        List<Flight> firstLegFlights = checkFlightAvailability(
+                                new SearchFlightsPage(driver, searchRequest)
+                        );
+
+                        if (firstLegFlights.isEmpty()) {
+                            log.info("[Connection-{}] No first-leg flights", connectionNumber);
+                            return validFlights;
+                        }
+
+                        log.info("[Connection-{}] Searching second-leg: {} -> {}", connectionNumber, connectionFull, destFull);
+                        loginPage.openHomePage();
+
+                        SearchRequest secondLegRequest = new SearchRequest(
+                                connectionQuery, connectionFull, destQuery, destFull, date
+                        );
+                        List<Flight> secondLegFlights = checkFlightAvailability(
+                                new SearchFlightsPage(driver, secondLegRequest)
+                        );
+
+                        if (!secondLegFlights.isEmpty()) {
+                            validFlights.addAll(firstLegFlights);
+                            validFlights.addAll(secondLegFlights);
+                            log.info("[Connection-{}] Found {} total flights via {}",
+                                    connectionNumber, validFlights.size(), connectionFull);
+                        } else {
+                            log.info("[Connection-{}] No second-leg flights", connectionNumber);
+                        }
+
+                        return validFlights;
+                    }
             );
-
-            if (firstLegFlights.isEmpty()) {
-                log.info("[Connection-{}] No first-leg flights", connectionNumber);
-                return validFlights;
-            }
-
-            // Second leg: connection -> destination
-            log.info("[Connection-{}] Searching second-leg: {} -> {}", connectionNumber, connectionFull, destFull);
-            loginPage.openHomePage();
-
-            SearchRequest secondLegRequest = new SearchRequest(
-                    connectionQuery, connectionFull, destQuery, destFull, date
-            );
-            List<Flight> secondLegFlights = checkFlightAvailability(
-                    new SearchFlightsPage(driver, secondLegRequest)
-            );
-
-            if (!secondLegFlights.isEmpty()) {
-                validFlights.addAll(firstLegFlights);
-                validFlights.addAll(secondLegFlights);
-                log.info("[Connection-{}] Found {} total flights via {}",
-                        connectionNumber, validFlights.size(), connectionFull);
-            } else {
-                log.info("[Connection-{}] No second-leg flights", connectionNumber);
-            }
         } catch (Exception e) {
             log.error("[Connection-{}] Error: {}", connectionNumber, e.getMessage(), e);
-        } finally {
-            closeDriver(driver);
+            return List.of();
         }
-
-        return validFlights;
     }
 
     private List<Destination> getPossibleConnectionsThreadSafe(SearchRequest searchRequest,
                                                                 WizzCredentials credentials) {
-        WebDriver driver = null;
         try {
-            driver = createAndLoginDriver(credentials);
-            LoginPage loginPage = new LoginPage(driver);
-            loginPage.openHomePage();
-            SearchFlightsPage searchPage = new SearchFlightsPage(driver, searchRequest);
-            return getPossibleConnectionsFromUI(searchPage, searchRequest);
+            return sessionManager.executeWithAuth(
+                    credentials.email(),
+                    credentials.password(),
+                    driver -> {
+                        LoginPage loginPage = new LoginPage(driver);
+                        loginPage.openHomePage();
+                        SearchFlightsPage searchPage = new SearchFlightsPage(driver, searchRequest);
+                        return getPossibleConnectionsFromUI(searchPage, searchRequest);
+                    }
+            );
         } catch (Exception e) {
             log.error("Error getting possible connections: {}", e.getMessage(), e);
             return List.of();
-        } finally {
-            closeDriver(driver);
         }
     }
 
