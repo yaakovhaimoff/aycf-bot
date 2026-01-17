@@ -9,23 +9,21 @@ import org.openqa.selenium.chrome.ChromeDriver;
 import java.time.Duration;
 
 public class WebDriverFactory {
-
     public enum BrowserType {
         CHROME, FIREFOX
     }
-
     public static WebDriver createDriver(BrowserType browserType) {
         try {
             WebDriver driver;
-//            boolean headless = Boolean.parseBoolean(System.getenv().getOrDefault("HEADLESS", "false"));
+            boolean headless = Boolean.parseBoolean(System.getenv().getOrDefault("HEADLESS", "false"));
 
             switch (browserType) {
                 case CHROME:
                     ChromeOptions chromeOptions = new ChromeOptions();
                     chromeOptions.addArguments("--no-sandbox", "--disable-dev-shm-usage", "--incognito");
-//                    if (headless) {
-//                        chromeOptions.addArguments("--headless=new", "--disable-gpu", "--window-size=1920,1080");
-//                    }
+                    if (headless) {
+                        chromeOptions.addArguments("--headless=new", "--disable-gpu", "--window-size=1920,1080");
+                    }
                     driver = new ChromeDriver(chromeOptions);
                     break;
 
