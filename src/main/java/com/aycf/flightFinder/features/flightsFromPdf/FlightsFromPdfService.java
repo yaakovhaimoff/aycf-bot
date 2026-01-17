@@ -146,9 +146,9 @@ public class FlightsFromPdfService implements IFlightsFromPdfService {
                     String cleanedTo = replaceNotLettersWithSpaces(to);
                     routesMap.computeIfAbsent(cleanedFrom, k -> new ArrayList<>()).add(cleanedTo);
                 }
-                else {
-                    log.warn("No matching city found for line: " + line);
-                }
+//                else {
+//                    log.warn("No matching city found for line: " + line);
+//                }
             }
         }
         return routesMap;

@@ -71,8 +71,17 @@ public class SearchFlightsPage {
         return destinations;
     }
     public void fillRoute() {
+        waitForPageReady();
         selectLocationInput("autocomplete-origin", originQuery, originFull);
-        selectLocationInput( "autocomplete-destination", destQuery, destFull);
+        selectLocationInput("autocomplete-destination", destQuery, destFull);
+    }
+    private void waitForPageReady() {
+        log.info("Waiting for page to be ready...");
+        wait.until(driver -> {
+            var loaders = driver.findElements(By.cssSelector(".loading, .spinner, [class*='loading'], [class*='Loading']"));
+            return loaders.stream().noneMatch(WebElement::isDisplayed);
+        });
+        log.info("Page is ready.");
     }
     private void selectLocationInput(String inputIdPrefix, String query, String exactText) {
         log.info("Starting selection for '{}'", exactText);
@@ -110,7 +119,6 @@ public class SearchFlightsPage {
         log.error("Could not find dropdown option for: {}", exactText);
     }
     private WebElement waitForVisibleDropdownWithItems() throws TimeoutException {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
         return wait.until(driver1 -> {
             var dropdowns = driver1.findElements(By.cssSelector("ul[role='listbox']"));
             for (WebElement dropdown : dropdowns) {

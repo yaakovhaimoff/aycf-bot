@@ -30,7 +30,7 @@ public class SearchFlightsService implements ISearchFlightsService {
     private final WizzCredentialProvider credentialProvider;
     private final IFlightsFromPdfService flightsFromPdfService;
     private final WebDriverSessionManager sessionManager;
-    private final int MAX_THREADS = 3;
+    private final int MAX_THREADS = 4;
     @Override
     @Timed(value = "flightFinder.searchDirectFlight", description = "Time taken to search direct flights")
     public List<Flight> searchDirectFlight(SearchRequest searchRequest) {
@@ -132,7 +132,7 @@ public class SearchFlightsService implements ISearchFlightsService {
         ExecutorService executor = Executors.newFixedThreadPool(MAX_THREADS);
         LocalDate baseDate = LocalDate.now();
 
-        List<Callable<List<Flight>>> tasks = IntStream.range(0, 1)
+        List<Callable<List<Flight>>> tasks = IntStream.range(0, MAX_THREADS)
                 .mapToObj(i -> {
                     String date = baseDate.plusDays(i).toString();
                     SearchRequest datedRequest = new SearchRequest(
