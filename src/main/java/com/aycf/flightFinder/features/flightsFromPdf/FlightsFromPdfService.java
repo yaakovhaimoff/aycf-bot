@@ -211,6 +211,15 @@ public class FlightsFromPdfService implements IFlightsFromPdfService {
     }
 
     @Override
+    public List<String> getDestinationsFromOrigin(String originFull) {
+        if (parsedRoutes.isEmpty()) {
+            downloadPdf();
+        }
+        String cleanedOrigin = cleanCityName(originFull);
+        return parsedRoutes.getOrDefault(cleanedOrigin, List.of());
+    }
+
+    @Override
     @Timed(value = "FlightsFromPdfService.getPossibleConnections.time", description = "Time taken to get possible connections from PDF")
     public List<Destination> getPossibleConnections(String originFull, String destinationFull, List<Destination> possibleConnections) {
         if (parsedRoutes.isEmpty()) {

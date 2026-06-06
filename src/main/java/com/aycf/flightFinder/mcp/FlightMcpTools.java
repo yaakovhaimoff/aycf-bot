@@ -92,6 +92,27 @@ public class FlightMcpTools {
         return sb.toString();
     }
 
+    @Tool(description = """
+            List all available Wizz Air AYCF destinations from a specific origin airport, according to the official PDF.
+            Use this to discover what routes exist from a given city before deciding where to search.
+            Use a common city name like 'Tel Aviv', 'Rome', 'London'.
+            Returns instantly from cached PDF data — no flight search is performed.
+            Always display the full list of destination names to the user, not just the count.
+            """)
+    public String listRoutesFromAirport(String origin) {
+        String resolvedOrigin = airportResolver.resolve(origin);
+        log.info("[MCP] listRoutesFromAirport: {}", resolvedOrigin);
+        List<String> destinations = flightsFromPdfService.getDestinationsFromOrigin(resolvedOrigin);
+        if (destinations.isEmpty()) {
+            return String.format("No routes found from %s in the Wizz Air AYCF PDF. " +
+                    "The city name may not match — try listAvailableRoutes to see all origins.", resolvedOrigin);
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("Available AYCF destinations from %s (%d route(s)):\n\n", resolvedOrigin, destinations.size()));
+        destinations.stream().sorted().forEach(d -> sb.append("• ").append(d).append("\n"));
+        return sb.toString();
+    }
+
     private SearchRequest buildRequest(String originFull, String destFull, String date) {
         return new SearchRequest(
                 airportResolver.extractQuery(originFull),

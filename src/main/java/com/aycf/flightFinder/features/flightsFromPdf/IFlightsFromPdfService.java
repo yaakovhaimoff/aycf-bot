@@ -10,4 +10,6 @@ public interface IFlightsFromPdfService {
     boolean hasRoute(String origin, String destination);
     List<Destination> getPossibleConnections(String originFull, String destinationFull, List<Destination> possibleConnections);
     Map<String, List<String>> getAllRoutes();
+
+    List<String> getDestinationsFromOrigin(String originFull);
 }
