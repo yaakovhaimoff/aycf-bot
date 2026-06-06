@@ -1,4 +1,4 @@
-# FlightFinder
+# FlightFinder MCP Server
 
 Automates flight searches for **Wizz Air's All You Can Fly (AYCF)** membership program. Uses Selenium WebDriver to interact with the Wizz Air site and find available flights — exposed as an MCP server that AI assistants (e.g. Claude) can call directly.
 

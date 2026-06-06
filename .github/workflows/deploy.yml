@@ -11,5 +11,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Copy env file
+        run: cp /home/ubuntu/aycf-bot/.env .env
+
       - name: Deploy
         run: docker compose up --build -d
