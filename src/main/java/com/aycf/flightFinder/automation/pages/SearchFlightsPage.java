@@ -101,7 +101,8 @@ public class SearchFlightsPage {
             for (WebElement option : options) {
                 try {
                     String optionText = option.getText().strip();
-                    if (exactText.toLowerCase().contains(optionText.toLowerCase())) {
+                    if (exactText.toLowerCase().contains(optionText.toLowerCase())
+                            || optionText.toLowerCase().contains(exactText.toLowerCase())) {
                         log.info("Match found: {} — attempting click...", optionText);
                         option.click();
                         log.info("Selected location: {}", optionText);

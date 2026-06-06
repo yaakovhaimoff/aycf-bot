@@ -23,6 +23,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.*;
+import java.util.Collections;
 
 @Slf4j
 @Service
@@ -178,6 +179,15 @@ public class FlightsFromPdfService implements IFlightsFromPdfService {
     private String replaceNotLettersWithSpaces(String city) {
         return city.replaceAll("[^\\p{L}]", " ").replaceAll("\\s+", " ").trim();
     }
+    @Override
+    public Map<String, List<String>> getAllRoutes() {
+        // check if empty, if empty then fill it
+        if (parsedRoutes.isEmpty()) {
+            downloadPdf();
+        }
+        return Collections.unmodifiableMap(parsedRoutes);
+    }
+
     @Override
     @Timed(value = "FlightsFromPdfService.getPossibleConnections.time", description = "Time taken to get possible connections from PDF")
     public List<Destination> getPossibleConnections(String originFull, String destinationFull, List<Destination> possibleConnections) {

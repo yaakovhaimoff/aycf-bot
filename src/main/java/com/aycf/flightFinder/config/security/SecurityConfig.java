@@ -19,6 +19,26 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 public class SecurityConfig {
 
     private final JwtAuthenticationFilter jwtAuthenticationFilter;
+    private final WizzAuthenticationProvider wizzAuthenticationProvider;
+
+    /**
+     * Highest-priority chain: MCP/SSE endpoints fully open, stateless, no session, no form-login.
+     * Matches all methods (GET for SSE stream, POST for MCP 2025-03-26 streamable HTTP).
+     */
+    @Bean
+    @Order(0)
+    public SecurityFilterChain mcpSecurityFilterChain(HttpSecurity http) throws Exception {
+        return http
+                .securityMatcher(request -> {
+                    String uri = request.getRequestURI();
+                    return uri.equals("/sse") || uri.startsWith("/mcp/");
+                })
+                .csrf(AbstractHttpConfigurer::disable)
+                .sessionManagement(session -> session
+                        .sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll())
+                .build();
+    }
 
     /**
      * Security filter chain for API endpoints (stateless, JWT-based)
@@ -62,6 +82,7 @@ public class SecurityConfig {
                         .defaultSuccessUrl("/search", true)
                         .failureUrl("/?error=true")
                         .permitAll())
+                .authenticationProvider(wizzAuthenticationProvider)
                 .sessionManagement(session -> session
                         .sessionFixation().migrateSession()
                         .maximumSessions(3))
