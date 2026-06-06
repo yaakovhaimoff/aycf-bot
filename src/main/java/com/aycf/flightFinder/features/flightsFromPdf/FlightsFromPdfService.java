@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import javax.net.ssl.HttpsURLConnection;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
@@ -50,15 +51,15 @@ public class FlightsFromPdfService implements IFlightsFromPdfService {
             "Hamburg", "Haugesund", "Heraklion", "Hurghada",
             "Iasi", "Ibiza", "Istanbul",
             "Jeddah",
-            "Karlsruhe/Baden-Baden", "Katowice", "Kerkyra", "Krakow", "Kutaisi",
+            "Karlsruhe/Baden-Baden", "Katowice", "Kerkyra", "Krakow", "Kutaisi", "Kosice", "Klaipeda/Palanga", "Kalamata",
             "Lamezia", "Larnaca", "Leeds/Bradford", "Leipzig/Halle", "Lisbon",
             "Liverpool", "Ljubljana", "London", "Lublin", "Lyon",
             "Maastricht", "Madeira", "Madinah", "Madrid", "Malaga", "Malmo", "Malta", "Marrakech", "Marsa", "Memmingen", "Milan", "Mykonos",
             "Naples", "Nice", "Nis", "Nuremberg",
-            "Ohrid", "Olbia", "Oslo",
-            "Palermo", "Palma De Mallorca", "Paris", "Paphos", "Perugia", "Pescara", "Pisa", "Podgorica", "Poprad/Tatry", "Porto", "Poznan", "Prague", "Pristina",
+            "Ohrid", "Olbia", "Oslo", "Oradea",
+            "Palermo", "Palma De Mallorca", "Paris", "Paphos", "Perugia", "Pescara", "Pisa", "Podgorica", "Poprad/Tatry", "Porto", "Plovdiv","Poznan", "Prague", "Pristina",
             "Radom", "Reykjavik", "Rimini", "Rhodes", "Rome", "Rzeszow",
-            "Salerno", "Santorini", "Sarajevo", "Sevilla", "Sharm el-Sheikh", "Sibiu", "Skopje", "Sofia", "Split", "Stavanger", "Suceava",
+            "Salerno", "Santorini", "Sarajevo", "Sevilla", "Sharm el-Sheikh", "Sibiu", "Skopje", "Sofia", "Split", "Stavanger", "Suceava", "Santander",
             "Stockholm", "Stuttgart", "Szczecin",
             "Tallinn", "Targu-Mures", "Tel Aviv", "Tenerife", "Thessaloniki", "Timisoara", "Tirana", "Trieste", "Tromso", "Trondheim", "Turin", "Turku", "Tuzla",
             "Valencia", "Varna", "Venice", "Verona", "Vienna", "Vilnius",
@@ -94,7 +95,9 @@ public class FlightsFromPdfService implements IFlightsFromPdfService {
                     String cookieHeader = buildCookieHeader(cookies);
 
                     log.info("Downloading PDF with authenticated session");
-                    HttpURLConnection connection = (HttpURLConnection) new URL(pdfUrl).openConnection();
+                    HttpsURLConnection connection = (HttpsURLConnection) new URL(pdfUrl).openConnection();
+                    connection.setSSLSocketFactory(trustAllSslContext().getSocketFactory());
+                    connection.setHostnameVerifier((h, s) -> true);
                     connection.setRequestProperty("Cookie", cookieHeader);
                     connection.setRequestMethod("GET");
 
@@ -104,6 +107,7 @@ public class FlightsFromPdfService implements IFlightsFromPdfService {
 
                     parsedRoutes = parseRoutes(destinationPath, allCities);
                     log.info("Parsed routes size: {}", parsedRoutes.size());
+                    log.info("Parsed routes: {}", parsedRoutes);
 
                 } catch (IOException e) {
                     log.error("Failed to download/parse PDF: {}", e.getMessage(), e);
@@ -112,6 +116,20 @@ public class FlightsFromPdfService implements IFlightsFromPdfService {
 
         } catch (Exception e) {
             log.error("Failed to download PDF from URL: {}", pdfUrl, e);
+        }
+    }
+
+    private javax.net.ssl.SSLContext trustAllSslContext() {
+        try {
+            javax.net.ssl.SSLContext ctx = javax.net.ssl.SSLContext.getInstance("TLS");
+            ctx.init(null, new javax.net.ssl.TrustManager[]{new javax.net.ssl.X509TrustManager() {
+                public java.security.cert.X509Certificate[] getAcceptedIssuers() { return new java.security.cert.X509Certificate[0]; }
+                public void checkClientTrusted(java.security.cert.X509Certificate[] c, String a) {}
+                public void checkServerTrusted(java.security.cert.X509Certificate[] c, String a) {}
+            }}, new java.security.SecureRandom());
+            return ctx;
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to create trust-all SSL context", e);
         }
     }
 
@@ -156,6 +174,10 @@ public class FlightsFromPdfService implements IFlightsFromPdfService {
     }
     @Override
     public boolean hasRoute(String origin, String destination) {
+        if (parsedRoutes.isEmpty()) {
+            log.warn("Parsed routes empty on hasRoute call — downloading PDF now");
+            downloadPdf();
+        }
         String cleanedOrigin = cleanCityName(origin);
         String cleanedDestination = cleanCityName(destination);
         log.info("Checking route from '{}' to '{}'", cleanedOrigin, cleanedDestination);
@@ -191,6 +213,10 @@ public class FlightsFromPdfService implements IFlightsFromPdfService {
     @Override
     @Timed(value = "FlightsFromPdfService.getPossibleConnections.time", description = "Time taken to get possible connections from PDF")
     public List<Destination> getPossibleConnections(String originFull, String destinationFull, List<Destination> possibleConnections) {
+        if (parsedRoutes.isEmpty()) {
+            log.warn("Parsed routes empty on getPossibleConnections call — downloading PDF now");
+            downloadPdf();
+        }
         String origin = cleanCityName(originFull);
         String destination = cleanCityName(destinationFull);
         log.info("Finding connections from '{}' to '{}', with possible connections: {}", origin, destination, possibleConnections);

@@ -3,7 +3,7 @@ package com.aycf.flightFinder.features.searchFlights;
 import com.aycf.flightFinder.automation.pages.LoginPage;
 import com.aycf.flightFinder.automation.pages.SearchFlightsPage;
 import com.aycf.flightFinder.automation.webdriver.WebDriverSessionManager;
-import com.aycf.flightFinder.controller.model.SearchRequest;
+import com.aycf.flightFinder.features.searchFlights.model.SearchRequest;
 import com.aycf.flightFinder.features.UserCredentials.WizzCredentialProvider;
 import com.aycf.flightFinder.features.UserCredentials.WizzCredentialProvider.WizzCredentials;
 import com.aycf.flightFinder.features.flightsFromPdf.IFlightsFromPdfService;

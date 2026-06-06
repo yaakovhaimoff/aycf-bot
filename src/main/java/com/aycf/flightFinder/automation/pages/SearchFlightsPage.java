@@ -1,6 +1,6 @@
 package com.aycf.flightFinder.automation.pages;
 
-import com.aycf.flightFinder.controller.model.SearchRequest;
+import com.aycf.flightFinder.features.searchFlights.model.SearchRequest;
 import com.aycf.flightFinder.features.searchFlights.model.Destination;
 import com.aycf.flightFinder.features.searchFlights.model.Flight;
 import org.openqa.selenium.By;
