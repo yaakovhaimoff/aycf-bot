@@ -1,34 +1,15 @@
-name: Deploy to GCP VM
+name: Deploy
 
 on:
   push:
-    branches:
-      - feature/aycf-spring-boot
+    branches: [feature/mcp-server]
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
 
     steps:
-      - name: Deploy to VM via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VM_HOST }}
-          username: ${{ secrets.VM_USER }}
-          key: ${{ secrets.SSH_PRIVATE_KEY }}
-          script: |
-            cd ~/aycf-bot
-            
-            # Discard local changes and pull latest
-            git fetch origin
-            git reset --hard origin/feature/aycf-spring-boot
-            
-            # Stop existing app
-            pkill -f 'spring-boot:run' || true
-            
-            # Start app in background
-            export $(cat .env | xargs)
-            export HEADLESS=true
-            nohup ./mvnw spring-boot:run > app.log 2>&1 &
-            
-            echo "Deployment complete"
+      - uses: actions/checkout@v4
+
+      - name: Deploy
+        run: docker compose up --build -d

@@ -86,7 +86,7 @@ The app runs an [MCP](https://modelcontextprotocol.io) server at `http://localho
 ┌─────────────────────────────────────────────┐
 │              Spring Boot App                │
 │                                             │
-│  FlightMcpTools           — MCP tools      │
+│  FlightMcpTools           — MCP tools       │
 │                                             │
 │  SearchFlightsService                       │
 │  ├── direct search (1 thread)               │

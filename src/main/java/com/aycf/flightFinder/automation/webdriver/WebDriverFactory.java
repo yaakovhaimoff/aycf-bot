@@ -20,6 +20,14 @@ public class WebDriverFactory {
             switch (browserType) {
                 case CHROME:
                     ChromeOptions chromeOptions = new ChromeOptions();
+                    String chromeBin = System.getenv("CHROME_BIN");
+                    if (chromeBin != null && !chromeBin.isBlank()) {
+                        chromeOptions.setBinary(chromeBin);
+                    }
+                    String chromeDriverPath = System.getenv("CHROME_DRIVER");
+                    if (chromeDriverPath != null && !chromeDriverPath.isBlank()) {
+                        System.setProperty("webdriver.chrome.driver", chromeDriverPath);
+                    }
                     chromeOptions.addArguments("--no-sandbox", "--disable-dev-shm-usage", "--incognito");
                     if (headless) {
                         chromeOptions.addArguments("--headless=new", "--disable-gpu", "--window-size=1920,1080");
