@@ -1,4 +1,4 @@
-FROM eclipse-temurin:17-jdk-bookworm AS builder
+FROM eclipse-temurin:17-jdk AS builder
 
 WORKDIR /app
 COPY .mvn/ .mvn/
@@ -7,9 +7,10 @@ RUN ./mvnw dependency:go-offline -q
 COPY src/ src/
 RUN ./mvnw clean package -DskipTests -q
 
-FROM eclipse-temurin:17-jre-bookworm
+FROM debian:bookworm-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    openjdk-17-jre-headless \
     chromium \
     chromium-driver \
     curl \
