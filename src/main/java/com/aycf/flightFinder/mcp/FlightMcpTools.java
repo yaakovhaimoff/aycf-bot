@@ -7,6 +7,7 @@ import com.aycf.flightFinder.features.searchFlights.model.SearchRequest;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDate;
@@ -23,15 +24,23 @@ public class FlightMcpTools {
     private final AirportResolver airportResolver;
 
     @Tool(description = """
-            Search for available Wizz Air AYCF direct flights between two cities on a specific date.
-            Use common city names like 'Tel Aviv', 'Rome', 'London', 'Paris', 'Barcelona'.
-            For cities with multiple airports (Rome, London, Milan, Paris, Stockholm, Brussels, Oslo, Venice),
-            you can be specific: 'Rome Fiumicino', 'London Luton', 'Milan Bergamo', etc.
-            Date format: YYYY-MM-DD.
-            Returns available flights with departure/arrival times, duration, and price.
-            If no flights found, try searchConnectionFlights or a different date.
-            """)
-    public String searchDirectFlight(String origin, String destination, String date) {
+        USE when the user names a specific date (e.g. "June 10", "tomorrow", "next Friday") AND a route.
+        DO NOT use if no date is mentioned — use searchNextDaysFlights instead.
+        DO NOT use to check what routes exist — use listRoutesFromAirport or listAvailableRoutes instead.
+        Search Wizz Air AYCF direct flights between two cities on ONE specific date.
+        Returns flights with times, duration, and price, or a clear 'no flights' message.
+        If this returns nothing, call searchConnectionFlights for the same route/date.
+        To scan several upcoming dates at once instead, use searchNextDaysFlights.
+        """)
+    public String searchDirectFlight(
+            @ToolParam(description = "Departure city, common name e.g. 'Tel Aviv', 'Rome', 'London'. "
+                    + "For multi-airport cities you may name the airport: 'Rome Fiumicino', 'London Luton', 'Milan Bergamo'.")
+            String origin,
+            @ToolParam(description = "Arrival city. Same format as origin.")
+            String destination,
+            @ToolParam(description = "Date as ISO YYYY-MM-DD, e.g. 2026-06-10. Must be today or later. "
+                    + "Resolve relative dates like 'tomorrow' or 'next Friday' to an absolute date before calling.")
+            String date) {
         String resolvedOrigin = airportResolver.resolve(origin);
         String resolvedDest = airportResolver.resolve(destination);
         log.info("[MCP] searchDirectFlight: {} -> {} on {}", resolvedOrigin, resolvedDest, date);
@@ -41,12 +50,19 @@ public class FlightMcpTools {
     }
 
     @Tool(description = """
+            USE when the user gives a route but NO specific date — e.g. "any flights to Rome?", "flights this week", "next few days".
+            DO NOT use if the user named a specific date — use searchDirectFlight instead.
+            DO NOT use to check what routes exist — use listRoutesFromAirport or listAvailableRoutes instead.
             Search for available Wizz Air AYCF direct flights over the next 4 days from today, concurrently.
-            Use this when the user asks about 'upcoming days', 'next few days', or has no specific date.
             Use common city names like 'Tel Aviv', 'Rome', 'London'.
             For cities with multiple airports, be specific: 'Rome Fiumicino', 'London Luton', etc.
             """)
-    public String searchNextDaysFlights(String origin, String destination) {
+    public String searchNextDaysFlights(
+            @ToolParam(description = "Departure city, common name e.g. 'Tel Aviv', 'Rome', 'London'. "
+                    + "For multi-airport cities you may name the airport: 'Rome Fiumicino', 'London Luton', 'Milan Bergamo'.")
+            String origin,
+            @ToolParam(description = "Arrival city. Same format as origin.")
+            String destination) {
         String resolvedOrigin = airportResolver.resolve(origin);
         String resolvedDest = airportResolver.resolve(destination);
         log.info("[MCP] searchNextDaysFlights: {} -> {}", resolvedOrigin, resolvedDest);
@@ -56,12 +72,21 @@ public class FlightMcpTools {
     }
 
     @Tool(description = """
+            USE only after searchDirectFlight returns no results for the same route and date, OR if the user explicitly asks for connecting/indirect flights.
+            DO NOT call this before trying searchDirectFlight first.
             Search for Wizz Air AYCF connecting flights (one-stop) between two cities on a specific date.
             Slower than direct search — checks multiple intermediate airports.
-            Use when no direct flights are found or user asks about connections.
             Use common city names like 'Tel Aviv', 'Rome', 'London'. Date format: YYYY-MM-DD.
             """)
-    public String searchConnectionFlights(String origin, String destination, String date) {
+    public String searchConnectionFlights(
+            @ToolParam(description = "Departure city, common name e.g. 'Tel Aviv', 'Rome', 'London'. "
+                    + "For multi-airport cities you may name the airport: 'Rome Fiumicino', 'London Luton', 'Milan Bergamo'.")
+            String origin,
+            @ToolParam(description = "Arrival city. Same format as origin.")
+            String destination,
+            @ToolParam(description = "Date as ISO YYYY-MM-DD, e.g. 2026-06-10. Must be today or later. "
+                    + "Resolve relative dates like 'tomorrow' or 'next Friday' to an absolute date before calling.")
+            String date) {
         String resolvedOrigin = airportResolver.resolve(origin);
         String resolvedDest = airportResolver.resolve(destination);
         log.info("[MCP] searchConnectionFlights: {} -> {} on {}", resolvedOrigin, resolvedDest, date);
@@ -71,9 +96,11 @@ public class FlightMcpTools {
     }
 
     @Tool(description = """
+            USE when the user asks "where can I fly?", "what routes are available?", "show me all destinations", or any question about ALL routes across ALL origins.
+            DO NOT use when the user names a specific origin — use listRoutesFromAirport instead.
+            DO NOT use when the user is searching for actual flights — use searchDirectFlight or searchNextDaysFlights instead.
             List all available Wizz Air AYCF routes from the official PDF.
             Returns a map of origin cities to their available destination cities.
-            Use this to discover valid routes before searching.
             """)
     public String listAvailableRoutes() {
         log.info("[MCP] listAvailableRoutes");
@@ -93,13 +120,17 @@ public class FlightMcpTools {
     }
 
     @Tool(description = """
+            USE when the user names a specific origin and asks what destinations they can fly to — e.g. "where can I fly from Tel Aviv?", "what routes from Rome?".
+            DO NOT use when the user is searching for actual flights — use searchDirectFlight or searchNextDaysFlights instead.
+            DO NOT use when no origin is specified — use listAvailableRoutes instead.
             List all available Wizz Air AYCF destinations from a specific origin airport, according to the official PDF.
-            Use this to discover what routes exist from a given city before deciding where to search.
-            Use a common city name like 'Tel Aviv', 'Rome', 'London'.
             Returns instantly from cached PDF data — no flight search is performed.
             Always display the full list of destination names to the user, not just the count.
             """)
-    public String listRoutesFromAirport(String origin) {
+    public String listRoutesFromAirport(
+            @ToolParam(description = "Departure city, common name e.g. 'Tel Aviv', 'Rome', 'London'. "
+                    + "For multi-airport cities you may name the airport: 'Rome Fiumicino', 'London Luton', 'Milan Bergamo'.")
+            String origin) {
         String resolvedOrigin = airportResolver.resolve(origin);
         log.info("[MCP] listRoutesFromAirport: {}", resolvedOrigin);
         List<String> destinations = flightsFromPdfService.getDestinationsFromOrigin(resolvedOrigin);
