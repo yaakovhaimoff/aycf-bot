@@ -19,7 +19,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.*;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -64,8 +63,8 @@ public class SearchFlightsService implements ISearchFlightsService {
     }
 
     @Override
-    @Timed(value = "flightFinder.searchFlightsWithConnections", description = "Time taken to search flights with connections")
-    public List<Flight> searchFlightsWithConnections(SearchRequest searchRequest) {
+    @Timed(value = "flightFinder.searchFlightsWithConnections", description = "Time taken to resolve connection routes")
+    public List<Destination> searchFlightsWithConnections(SearchRequest searchRequest) {
         WizzCredentials credentials = credentialProvider.getCredentialsForCurrentUser();
 
         List<Destination> possibleConnectionsFromUI = getPossibleConnectionsThreadSafe(searchRequest, credentials);
@@ -78,41 +77,11 @@ public class SearchFlightsService implements ISearchFlightsService {
 
         if (validConnections.isEmpty()) {
             log.info("No valid connections found for {} -> {}", searchRequest.originFull(), searchRequest.destFull());
-            return List.of();
+        } else {
+            log.info("Found {} valid connection routes for {} -> {}",
+                    validConnections.size(), searchRequest.originFull(), searchRequest.destFull());
         }
-
-        ExecutorService executor = Executors.newFixedThreadPool(MAX_THREADS);
-        AtomicInteger counter = new AtomicInteger(0);
-
-        List<Callable<List<Flight>>> tasks = validConnections.stream()
-                .map(connection -> (Callable<List<Flight>>) () -> {
-                    int connectionNumber = counter.getAndIncrement();
-                    return processConnection(connection, searchRequest, connectionNumber, credentials);
-                })
-                .toList();
-
-        List<Flight> allFlights = new ArrayList<>();
-        try {
-            log.info("Starting connection search for {} possible connections with up to {} threads",
-                    validConnections.size(), MAX_THREADS);
-
-            List<Future<List<Flight>>> futures = executor.invokeAll(tasks);
-
-            for (Future<List<Flight>> future : futures) {
-                try {
-                    allFlights.addAll(future.get());
-                } catch (Exception e) {
-                    log.error("Error processing connection: {}", e.getMessage());
-                }
-            }
-        } catch (InterruptedException e) {
-            log.error("Execution interrupted: {}", e.getMessage());
-            Thread.currentThread().interrupt();
-        } finally {
-            executor.shutdown();
-            log.info("All connection tasks finished. Total flights found: {}", allFlights.size());
-        }
-        return allFlights;
+        return validConnections;
     }
 
     @Override
@@ -189,65 +158,6 @@ public class SearchFlightsService implements ISearchFlightsService {
             );
         } catch (Exception e) {
             log.error("[NextDay-{}] Error during search: {}", date, e.getMessage(), e);
-            return List.of();
-        }
-    }
-
-    private List<Flight> processConnection(Destination connection, SearchRequest searchRequest,
-                                           int connectionNumber, WizzCredentials credentials) {
-        String originFull = searchRequest.originFull();
-        String destQuery = searchRequest.destQuery();
-        String destFull = searchRequest.destFull();
-        String date = searchRequest.date();
-        String connectionQuery = connection.destinationQuery();
-        String connectionFull = connection.destinationFull();
-
-        log.info("[Connection-{}] Starting: {} -> {} -> {}",
-                connectionNumber, originFull, connectionFull, destFull);
-
-        try {
-            return sessionManager.executeWithAuth(
-                    credentials.email(),
-                    credentials.password(),
-                    driver -> {
-                        List<Flight> validFlights = new ArrayList<>();
-
-                        log.info("[Connection-{}] Searching first-leg: {} -> {}", connectionNumber, originFull, connectionFull);
-                        LoginPage loginPage = new LoginPage(driver);
-                        loginPage.openHomePage();
-                        List<Flight> firstLegFlights = checkFlightAvailability(
-                                new SearchFlightsPage(driver, searchRequest)
-                        );
-
-                        if (firstLegFlights.isEmpty()) {
-                            log.info("[Connection-{}] No first-leg flights", connectionNumber);
-                            return validFlights;
-                        }
-
-                        log.info("[Connection-{}] Searching second-leg: {} -> {}", connectionNumber, connectionFull, destFull);
-                        loginPage.openHomePage();
-
-                        SearchRequest secondLegRequest = new SearchRequest(
-                                connectionQuery, connectionFull, destQuery, destFull, date
-                        );
-                        List<Flight> secondLegFlights = checkFlightAvailability(
-                                new SearchFlightsPage(driver, secondLegRequest)
-                        );
-
-                        if (!secondLegFlights.isEmpty()) {
-                            validFlights.addAll(firstLegFlights);
-                            validFlights.addAll(secondLegFlights);
-                            log.info("[Connection-{}] Found {} total flights via {}",
-                                    connectionNumber, validFlights.size(), connectionFull);
-                        } else {
-                            log.info("[Connection-{}] No second-leg flights", connectionNumber);
-                        }
-
-                        return validFlights;
-                    }
-            );
-        } catch (Exception e) {
-            log.error("[Connection-{}] Error: {}", connectionNumber, e.getMessage(), e);
             return List.of();
         }
     }

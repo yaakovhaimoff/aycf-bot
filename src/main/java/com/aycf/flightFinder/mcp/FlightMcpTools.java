@@ -2,6 +2,7 @@ package com.aycf.flightFinder.mcp;
 
 import com.aycf.flightFinder.features.flightsFromPdf.IFlightsFromPdfService;
 import com.aycf.flightFinder.features.searchFlights.ISearchFlightsService;
+import com.aycf.flightFinder.features.searchFlights.model.Destination;
 import com.aycf.flightFinder.features.searchFlights.model.Flight;
 import com.aycf.flightFinder.features.searchFlights.model.SearchRequest;
 import lombok.RequiredArgsConstructor;
@@ -72,11 +73,11 @@ public class FlightMcpTools {
     }
 
     @Tool(description = """
-            USE only after searchDirectFlight returns no results for the same route and date, OR if the user explicitly asks for connecting/indirect flights.
-            DO NOT call this before trying searchDirectFlight first.
-            Search for Wizz Air AYCF connecting flights (one-stop) between two cities on a specific date.
-            Slower than direct search — checks multiple intermediate airports.
-            Use common city names like 'Tel Aviv', 'Rome', 'London'. Date format: YYYY-MM-DD.
+            USE when the user asks what one-stop connection options exist between two cities — e.g. "how can I connect from Tel Aviv to London?", "what are the connection airports?".
+            DO NOT use when the user wants actual flight times/prices — use searchDirectFlight instead.
+            Returns the list of available intermediate airports (connection routes) between origin and destination,
+            derived from Wizz Air AYCF autocomplete and PDF route data. No flight availability is checked.
+            Use common city names like 'Tel Aviv', 'Rome', 'London'.
             """)
     public String searchConnectionFlights(
             @ToolParam(description = "Departure city, common name e.g. 'Tel Aviv', 'Rome', 'London'. "
@@ -91,8 +92,8 @@ public class FlightMcpTools {
         String resolvedDest = airportResolver.resolve(destination);
         log.info("[MCP] searchConnectionFlights: {} -> {} on {}", resolvedOrigin, resolvedDest, date);
         SearchRequest request = buildRequest(resolvedOrigin, resolvedDest, date);
-        List<Flight> flights = searchFlightsService.searchFlightsWithConnections(request);
-        return formatFlights(flights, resolvedOrigin, resolvedDest, date);
+        List<Destination> routes = searchFlightsService.searchFlightsWithConnections(request);
+        return formatConnectionRoutes(routes, resolvedOrigin, resolvedDest);
     }
 
     @Tool(description = """
@@ -152,6 +153,18 @@ public class FlightMcpTools {
                 destFull,
                 date
         );
+    }
+
+    private String formatConnectionRoutes(List<Destination> routes, String origin, String destination) {
+        if (routes.isEmpty()) {
+            return String.format("No connection routes found from %s to %s.", origin, destination);
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("Found %d connection route(s) from %s to %s:\n\n", routes.size(), origin, destination));
+        for (int i = 0; i < routes.size(); i++) {
+            sb.append(String.format("%d. %s → %s → %s\n", i + 1, origin, routes.get(i).destinationFull(), destination));
+        }
+        return sb.toString();
     }
 
     private String formatFlights(List<Flight> flights, String origin, String destination, String date) {
