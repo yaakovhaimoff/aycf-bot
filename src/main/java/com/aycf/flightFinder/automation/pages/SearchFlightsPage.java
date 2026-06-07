@@ -4,13 +4,20 @@ import com.aycf.flightFinder.features.searchFlights.model.SearchRequest;
 import com.aycf.flightFinder.features.searchFlights.model.Destination;
 import com.aycf.flightFinder.features.searchFlights.model.Flight;
 import org.openqa.selenium.By;
+import org.openqa.selenium.OutputType;
 import org.openqa.selenium.StaleElementReferenceException;
+import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import lombok.extern.slf4j.Slf4j;
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
 import java.time.Duration;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeoutException;
@@ -26,7 +33,7 @@ public class SearchFlightsPage {
     private final String date;
     public SearchFlightsPage(WebDriver driver, SearchRequest searchRequest) {
         this.driver = driver;
-        this.wait = new WebDriverWait(driver, Duration.ofSeconds(20));
+        this.wait = new WebDriverWait(driver, Duration.ofSeconds(60));
         this.originQuery = searchRequest.originQuery();
         this.originFull = searchRequest.originFull();
         this.destQuery = searchRequest.destQuery();
@@ -185,7 +192,22 @@ public class SearchFlightsPage {
             return flights.stream().map(this::parseFlight).toList();
         } catch (Exception e) {
             log.error("Timeout or error waiting for results: {}", e.getMessage());
+            log.error("Page URL at timeout: {}", driver.getCurrentUrl());
+            log.error("Page title at timeout: {}", driver.getTitle());
+            takeDebugScreenshot();
             return List.of();
+        }
+    }
+
+    private void takeDebugScreenshot() {
+        try {
+            File screenshot = ((TakesScreenshot) driver).getScreenshotAs(OutputType.FILE);
+            String timestamp = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyyMMdd_HHmmss"));
+            File dest = new File("/tmp/flight-debug-" + timestamp + ".png");
+            Files.copy(screenshot.toPath(), dest.toPath());
+            log.error("Debug screenshot saved to: {}", dest.getAbsolutePath());
+        } catch (IOException ex) {
+            log.error("Failed to save debug screenshot: {}", ex.getMessage());
         }
     }
 
