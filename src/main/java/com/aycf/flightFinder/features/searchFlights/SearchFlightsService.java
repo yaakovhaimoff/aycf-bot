@@ -7,6 +7,7 @@ import com.aycf.flightFinder.features.searchFlights.model.SearchRequest;
 import com.aycf.flightFinder.features.UserCredentials.WizzCredentialProvider;
 import com.aycf.flightFinder.features.UserCredentials.WizzCredentialProvider.WizzCredentials;
 import com.aycf.flightFinder.features.flightsFromPdf.IFlightsFromPdfService;
+import com.aycf.flightFinder.features.searchFlights.model.ConnectionFlightResult;
 import com.aycf.flightFinder.features.searchFlights.model.Destination;
 import com.aycf.flightFinder.features.searchFlights.model.Flight;
 import io.micrometer.core.annotation.Timed;
@@ -82,6 +83,41 @@ public class SearchFlightsService implements ISearchFlightsService {
                     validConnections.size(), searchRequest.originFull(), searchRequest.destFull());
         }
         return validConnections;
+    }
+
+    @Override
+    @Timed(value = "flightFinder.searchFlightViaConnection", description = "Time taken to search a specific connection route")
+    public ConnectionFlightResult searchFlightViaConnection(SearchRequest firstLeg, SearchRequest secondLeg) {
+        WizzCredentials credentials = credentialProvider.getCredentialsForCurrentUser();
+        String via = firstLeg.destFull();
+        try {
+            return sessionManager.executeWithAuth(
+                    credentials.email(),
+                    credentials.password(),
+                    driver -> {
+                        LoginPage loginPage = new LoginPage(driver);
+                        loginPage.openHomePage();
+
+                        log.info("Searching first leg: {} -> {}", firstLeg.originFull(), via);
+                        List<Flight> leg1 = checkFlightAvailability(new SearchFlightsPage(driver, firstLeg));
+
+                        if (leg1.isEmpty()) {
+                            log.info("No first-leg flights — skipping second leg");
+                            return new ConnectionFlightResult(List.of(), List.of());
+                        }
+
+                        log.info("First leg found {} flight(s). Searching second leg: {} -> {}", leg1.size(), via, secondLeg.destFull());
+                        loginPage.openHomePage();
+                        List<Flight> leg2 = checkFlightAvailability(new SearchFlightsPage(driver, secondLeg));
+
+                        log.info("Second leg found {} flight(s)", leg2.size());
+                        return new ConnectionFlightResult(leg1, leg2);
+                    }
+            );
+        } catch (Exception e) {
+            log.error("Error searching connection flight via {}: {}", via, e.getMessage(), e);
+            return new ConnectionFlightResult(List.of(), List.of());
+        }
     }
 
     @Override

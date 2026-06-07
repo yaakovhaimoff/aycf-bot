@@ -2,6 +2,7 @@ package com.aycf.flightFinder.mcp;
 
 import com.aycf.flightFinder.features.flightsFromPdf.IFlightsFromPdfService;
 import com.aycf.flightFinder.features.searchFlights.ISearchFlightsService;
+import com.aycf.flightFinder.features.searchFlights.model.ConnectionFlightResult;
 import com.aycf.flightFinder.features.searchFlights.model.Destination;
 import com.aycf.flightFinder.features.searchFlights.model.Flight;
 import com.aycf.flightFinder.features.searchFlights.model.SearchRequest;
@@ -97,6 +98,33 @@ public class FlightMcpTools {
     }
 
     @Tool(description = """
+            USE after searchConnectionFlights returns available via-airports, when the user picks a specific connection airport to fly through.
+            Searches both legs sequentially on the same date: first checks origin→via, and only if flights exist there, checks via→destination.
+            Returns actual flight times, durations, and prices for each leg.
+            Use common city names for all three cities (e.g. 'Tel Aviv', 'Budapest', 'London'). Date format: YYYY-MM-DD.
+            """)
+    public String searchFlightViaConnection(
+            @ToolParam(description = "Departure city, common name e.g. 'Tel Aviv', 'Rome', 'London'. "
+                    + "For multi-airport cities you may name the airport: 'Rome Fiumicino', 'London Luton', 'Milan Bergamo'.")
+            String origin,
+            @ToolParam(description = "Intermediate connection city (via airport). Same format as origin.")
+            String via,
+            @ToolParam(description = "Final destination city. Same format as origin.")
+            String destination,
+            @ToolParam(description = "Date as ISO YYYY-MM-DD, e.g. 2026-06-10. Must be today or later. "
+                    + "Resolve relative dates like 'tomorrow' or 'next Friday' to an absolute date before calling.")
+            String date) {
+        String resolvedOrigin = airportResolver.resolve(origin);
+        String resolvedVia = airportResolver.resolve(via);
+        String resolvedDest = airportResolver.resolve(destination);
+        log.info("[MCP] searchFlightViaConnection: {} -> {} -> {} on {}", resolvedOrigin, resolvedVia, resolvedDest, date);
+        SearchRequest firstLeg = buildRequest(resolvedOrigin, resolvedVia, date);
+        SearchRequest secondLeg = buildRequest(resolvedVia, resolvedDest, date);
+        ConnectionFlightResult result = searchFlightsService.searchFlightViaConnection(firstLeg, secondLeg);
+        return formatConnectionFlightResult(result, resolvedOrigin, resolvedVia, resolvedDest, date);
+    }
+
+    @Tool(description = """
             USE when the user asks "where can I fly?", "what routes are available?", "show me all destinations", or any question about ALL routes across ALL origins.
             DO NOT use when the user names a specific origin — use listRoutesFromAirport instead.
             DO NOT use when the user is searching for actual flights — use searchDirectFlight or searchNextDaysFlights instead.
@@ -153,6 +181,32 @@ public class FlightMcpTools {
                 destFull,
                 date
         );
+    }
+
+    private String formatConnectionFlightResult(ConnectionFlightResult result, String origin, String via, String destination, String date) {
+        if (result.firstLeg().isEmpty()) {
+            return String.format("No flights found on the first leg (%s → %s) on %s.", origin, via, date);
+        }
+        if (result.secondLeg().isEmpty()) {
+            return String.format(
+                    "Found %d flight(s) on the first leg (%s → %s), but no flights on the second leg (%s → %s) on %s.",
+                    result.firstLeg().size(), origin, via, via, destination, date);
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("Connection flights via %s on %s:\n\n", via, date));
+        sb.append(String.format("Leg 1: %s → %s (%d flight(s))\n", origin, via, result.firstLeg().size()));
+        for (int i = 0; i < result.firstLeg().size(); i++) {
+            Flight f = result.firstLeg().get(i);
+            sb.append(String.format("  %d. Depart: %s → Arrive: %s | Duration: %s | Price: %s\n",
+                    i + 1, f.departure(), f.arrival(), f.duration(), f.price()));
+        }
+        sb.append(String.format("\nLeg 2: %s → %s (%d flight(s))\n", via, destination, result.secondLeg().size()));
+        for (int i = 0; i < result.secondLeg().size(); i++) {
+            Flight f = result.secondLeg().get(i);
+            sb.append(String.format("  %d. Depart: %s → Arrive: %s | Duration: %s | Price: %s\n",
+                    i + 1, f.departure(), f.arrival(), f.duration(), f.price()));
+        }
+        return sb.toString();
     }
 
     private String formatConnectionRoutes(List<Destination> routes, String origin, String destination) {
