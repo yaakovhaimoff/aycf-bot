@@ -7,6 +7,7 @@ import org.openqa.selenium.firefox.FirefoxDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 
 import java.time.Duration;
+import java.util.Map;
 
 public class WebDriverFactory {
     public enum BrowserType {
@@ -28,11 +29,23 @@ public class WebDriverFactory {
                     if (chromeDriverPath != null && !chromeDriverPath.isBlank()) {
                         System.setProperty("webdriver.chrome.driver", chromeDriverPath);
                     }
-                    chromeOptions.addArguments("--no-sandbox", "--disable-dev-shm-usage", "--incognito");
+                    chromeOptions.addArguments(
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--incognito",
+                        "--disable-blink-features=AutomationControlled",
+                        "--window-size=1920,1080",
+                        "--user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/148.0.0.0 Safari/537.36"
+                    );
+                    chromeOptions.setExperimentalOption("excludeSwitches", new String[]{"enable-automation"});
+                    chromeOptions.setExperimentalOption("useAutomationExtension", false);
                     if (headless) {
-                        chromeOptions.addArguments("--headless=new", "--disable-gpu", "--window-size=1920,1080");
+                        chromeOptions.addArguments("--headless=new", "--disable-gpu");
                     }
-                    driver = new ChromeDriver(chromeOptions);
+                    ChromeDriver chromeDriver = new ChromeDriver(chromeOptions);
+                    chromeDriver.executeCdpCommand("Page.addScriptToEvaluateOnNewDocument",
+                        Map.of("source", "Object.defineProperty(navigator, 'webdriver', {get: () => undefined})"));
+                    driver = chromeDriver;
                     break;
 
                 case FIREFOX:
